@@ -18,8 +18,9 @@ int main () {
     int dir;
     snd_pcm_uframes_t frames;
     char *buffer;
-    clock_t t;
+    clock_t t, dt, cycle;
     int fd;
+    double time_taken;
 
     fd = open("record.raw", O_WRONLY | O_CREAT);
     if (fd == -1) {
@@ -27,7 +28,6 @@ int main () {
         exit(4);
     }
 
-    t = clock();
     rc = snd_pcm_open(&handle, "default", SND_PCM_STREAM_CAPTURE, 0);
 
     if (rc < 0){
@@ -44,28 +44,30 @@ int main () {
     frames = 32;
     snd_pcm_hw_params_set_period_size_near(handle, params, &frames, &dir);
     
-    t = clock() - t;
-    double time_taken = ((double)t)/CLOCKS_PER_SEC; // in seconds
-    printf("setup took %f seconds to execute \n", time_taken); 
-
     rc = snd_pcm_hw_params(handle, params);
     if (rc < 0) {
         fprintf (stderr, "unable to set hw parameters: %s\n", snd_strerror(rc));
         exit(2);
     }
 
-    t = clock() - t;
-    time_taken = ((double)t)/CLOCKS_PER_SEC; // in seconds
-    printf("writing setu took %f seconds to execute \n", time_taken); 
-
     snd_pcm_hw_params_get_period_size(params, &frames, &dir);
     size = frames * 4;
     buffer = (char *) malloc(size);
     snd_pcm_hw_params_get_period_time(params, &val, &dir);
-    loops = 1000;
+    loops = 2;
+
+    rc = snd_pcm_hw_params_get_rate(params, &val, &dir);
+    printf("rate is: %i\n", val);
+
     while (loops > 0) {
         loops--;
+        t = clock();
         rc = snd_pcm_readi(handle, buffer, frames);
+        dt = clock() - t;
+        cycle = dt;
+        time_taken = ((double)dt)/CLOCKS_PER_SEC; // in seconds
+        printf("read: %f seconds\n", time_taken); 
+
         if (rc == -EPIPE) {
             fprintf(stderr, "overrun occured\n");
             snd_pcm_prepare(handle);
@@ -73,16 +75,20 @@ int main () {
             fprintf(stderr, "error from read: %s\n", snd_strerror(rc));
         }else if (rc != (int)frames) {
             fprintf(stderr, "short read, read %d frames\n", rc);
+        } else {
+            printf("Frames read: %i\n", rc);
         }
+        t = clock();
         rc = write(fd, buffer, size);
         if (rc != size) {
             fprintf(stderr, "short write: wrote %d bytes\n", rc);
         }
-
-        t = clock() - t;
-        time_taken = ((double)t)/CLOCKS_PER_SEC; // in seconds
-        printf("%f seconds\n", time_taken); 
-
+        dt = clock() - t;
+        cycle = cycle + dt;
+        time_taken = ((double)dt)/CLOCKS_PER_SEC; // in seconds
+        printf("write: %f seconds\n", time_taken); 
+        time_taken = ((double)cycle)/CLOCKS_PER_SEC; // in seconds
+        //printf("cycle: %f seconds\n", time_taken); 
     }
 
     snd_pcm_drain(handle);

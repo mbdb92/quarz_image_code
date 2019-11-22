@@ -1,10 +1,28 @@
 #define ALSA_PCM_NEW_HW_PARAMS_API
-#define MONO 0
+#define DEVICE "default"
+#define CHANNEL_NUMBER 2
 #define RATE 44100u
 #define FRAMES 32
+#define OK 0
+#define PCM_OPEN_FAIL 1
+#define HW_ANY_PARAMS_FAIL 2
+#define HW_SET_ACCESS_FAIL 3
+#define HW_SET_FORMAT_FAIL 4
+#define HW_SET_CHANNELS_FAIL 5
+#define HW_SET_RATE_FAIL 6
+#define HW_SET_PERIOD_FAIL 7
+#define HW_PARAMS_ERROR 8
+#define MALLOC_ERROR 9
 
 #include <alsa/asoundlib.h>
+// for time function
+#include <time.h>
+// for file access
+#include <stdio.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
+// Helper function for debugging errors
 void check_state( snd_pcm_t *handle ) {
     switch( (unsigned int) snd_pcm_state(handle) ) {
             case SND_PCM_STATE_OPEN:
@@ -39,101 +57,133 @@ void check_state( snd_pcm_t *handle ) {
     }
 }
 
-int main() {
-    // Für die einzelnen Return Codes und deren evaluation
-    int rc;
-    snd_pcm_t *handle;
-    snd_pcm_hw_params_t *params;
-    snd_pcm_format_t *format;
-    int dir;
-    // Diese Zuweisungen sehen sinnfrei aus, sie dienen dazu, das ein Pointer auf den Wert erzeugt werden kann
+// Central error code resolver, so I can change and edit them at one point
+void print_error_code( int errnr ) {
+    switch( errnr ) {
+            case PCM_OPEN_FAIL:
+                fprintf(stderr, "snd_pcm_open() failed: %s\n", snd_strerror(errnr));
+                break;
+            case HW_ANY_PARAMS_FAIL:
+                fprintf(stderr, "snd_pcm_hw_params_any() failed: %s\n", snd_strerror(errnr));
+                break;
+            case HW_SET_ACCESS_FAIL:
+                fprintf(stderr, "snd_pcm_hw_params_set_access() failed: %s\n", snd_strerror(errnr));
+                break;
+            case HW_SET_FORMAT_FAIL:
+                fprintf(stderr, "snd_pcm_hw_params_set_format() failed: %s\n", snd_strerror(errnr));
+                break;
+            case HW_SET_CHANNELS_FAIL:
+                fprintf(stderr, "snd_pcm_hw_params_set_channels() failed: %s\n", snd_strerror(errnr));
+                break;
+            case HW_SET_RATE_FAIL:
+                fprintf(stderr, "snd_pcm_hw_params_set_rate_near() failed: %s\n", snd_strerror(errnr));
+                break;
+            case HW_SET_PERIOD_FAIL:
+                fprintf(stderr, "snd_pcm_hw_params_set_period_size_near() failed: %s\n", snd_strerror(errnr));
+                break;
+            case HW_PARAMS_ERROR:
+                fprintf(stderr, "Setting struct failed\n");
+                fprintf(stderr, "snd_pcm_hw_params() failed: %s\n", snd_strerror(errnr));
+                break;
+            default: 
+                break;
+    }
+}
+
+int setup_pcm_struct( snd_pcm_t *handle, snd_pcm_hw_params_t *params ) {
+    int rc, dir;
     unsigned int rate = RATE;
+    printf("Rate is %i \n", rate);
     snd_pcm_uframes_t frames = FRAMES;
-    char *buffer;
-
-    // Öffnet das device "dafault" zum aufnehmen. Dabei soll es nicht blockieren (?)
-    // Die Speicheradresse vom Pointer wird übergeben, da snd_pcm_open einen pointer auf einen pointer braucht
-    rc = snd_pcm_open( &handle, "default", SND_PCM_STREAM_CAPTURE, SND_PCM_NONBLOCK );
-    if (rc < 0){
-        fprintf(stderr, "unable to open pcm device: %s\n", snd_strerror(rc));
-        exit(1);
-    }
-    check_state( handle );
-
-    // Speicherreservierung im Stack. Alternativ kann man malloc nutzen
-    snd_pcm_hw_params_alloca(&params);
-    // CHECK! Füllen des Parameterstructs mit Basisconfig
-    rc = snd_pcm_hw_params_any(handle, params);
-    if (rc < 0){
-        fprintf(stderr, "unable to get basic struct: %s\n", snd_strerror(rc));
-        exit(1);
-    }
-    check_state( handle );
-    // Hier kann alternativ mmap angewendet werden. Dies kann mit der fft sinnvoll sein,
-    // erstmal sollte aber normales rw verwendet werden
-    // NONINTERLEAVED da sowieso Mono verwendet werden soll. Bei Stereo sollte Interleaved
-    // verwendet werden, da hier kein Handle für die verschiedenen Speicherquews verwendet wird
-    rc = snd_pcm_hw_params_set_access(handle, params, SND_PCM_ACCESS_RW_INTERLEAVED);
-    if (rc < 0){
-        fprintf(stderr, "unable to set access mode: %s\n", snd_strerror(rc));
-        exit(1);
-    }
-    check_state( handle );
-    // Setzen des formats auf den Standart bei normalen CPUs
-    rc = snd_pcm_hw_params_set_format(handle, params, SND_PCM_FORMAT_S16_LE);
-    if (rc < 0){
-        fprintf(stderr, "unable to set format mode: %s\n", snd_strerror(rc));
-        exit(1);
-    }
-    check_state( handle );
-    // Verwendung von einem Monochannel. Ich brauch eigentlich kein Stereo für die Erkennung
-    rc = snd_pcm_hw_params_set_channels(handle, params, MONO);
-    check_state( handle );
-
-    // &RATE mit #define RATE geht btw. auch nicht, deswegen wird die int definiert. Wird zwar erst 
-    // im nächsten Befehl notwendig, aber dann braucht man es nur an einer Stelle ändern
-    rc = snd_pcm_hw_params_test_rate(handle, params, rate, dir);
+    rc = snd_pcm_open( &handle, DEVICE, SND_PCM_STREAM_CAPTURE, SND_PCM_NONBLOCK );
     if (rc < 0)
-        fprintf(stderr, "rate isn't available: %i\n", rate);
+        return PCM_OPEN_FAIL;
+    snd_pcm_hw_params_alloca(&params);
+    rc = snd_pcm_hw_params_any(handle, params);
+    if (rc < 0)
+        return HW_ANY_PARAMS_FAIL;
 
-    check_state( handle );
-    // Setzt die Rate so nahe wie möglich an die gewünschte. Der Test dient nur zur Information
-    // die Funktion hier sollte auch funktionieren, wenn der Test abstruse ist
+    rc = snd_pcm_hw_params_set_access(handle, params, SND_PCM_ACCESS_RW_INTERLEAVED);
+    if (rc < 0)
+        return HW_SET_ACCESS_FAIL;
+    rc = snd_pcm_hw_params_set_format(handle, params, SND_PCM_FORMAT_S16_LE);
+    if (rc < 0)
+        return HW_SET_FORMAT_FAIL;
+    rc = snd_pcm_hw_params_set_channels(handle, params, CHANNEL_NUMBER);
+    if (rc < 0)
+        return HW_SET_CHANNELS_FAIL;
     rc = snd_pcm_hw_params_set_rate_near(handle, params, &rate, &dir);
-    if (rc < 0){
-        fprintf(stderr, "unable to set format mode: %s\n", snd_strerror(rc));
-        exit(1);
-    }
-    check_state( handle );
-    snd_pcm_hw_params_set_period_size_near(handle, params, &frames, &dir);
-    if (rc < 0){
-        fprintf(stderr, "unable to set period size: %s\n", snd_strerror(rc));
-        exit(1);
-    }
-    check_state( handle );
+    if (rc < 0)
+        return HW_SET_RATE_FAIL;
+    rc = snd_pcm_hw_params_set_period_size_near(handle, params, &frames, &dir);
+    if (rc < 0)
+        return HW_SET_PERIOD_FAIL;
+    return OK;
+}
+
+int register_device ( snd_pcm_t *handle, snd_pcm_hw_params_t *params, char *buffer) {
+    int rc, dir, size;
+    snd_pcm_uframes_t frames;
 
     rc = snd_pcm_hw_params(handle, params);
-    if (rc < 0) {
-        fprintf (stderr, "unable to set hw parameters: %s\n", snd_strerror(rc));
-        exit(2);
-    }
-    check_state( handle );
-
-    // Der Wert ist in frames gespeichert, das hier der gesetzte überschrieben wird, kann uns egal sein
-    snd_pcm_hw_params_get_period_size(params, &frames, &dir);
-//    printf("Framescount: %i\n", frames);
-
-    // Copied Code
-    int size;
-    long loops;
-    unsigned int val;
+    if (rc < 0)
+        return HW_PARAMS_ERROR;
+    rc = snd_pcm_hw_params_get_period_size(params, &frames, &dir);
+    if (rc < 0)
+        return HW_PARAMS_ERROR;
     size = frames * 4;
     buffer = (char *) malloc(size);
-    snd_pcm_hw_params_get_period_time(params, &val, &dir);
-    loops = 100000 / val;
+    if (buffer == NULL)
+        return MALLOC_ERROR;
+    return OK;
+}
+
+int record_to_file () {
+    long loops;
+    int rc, dir, size;
+    snd_pcm_t *handle;
+    snd_pcm_hw_params_t *params;
+    snd_pcm_uframes_t frames;
+    char *buffer;
+    clock_t t, dt, cycle;
+    int fd;
+    double time_taken;
+
+    fd = open("record.raw", O_WRONLY | O_CREAT);
+    if (fd == -1) {
+        fprintf(stderr, "unable to open file: %s\n", strerror(errno));
+        exit(4);
+    }
+
+    // alloca hat keinen returnvalue da es ein Macro ist
+    //snd_pcm_hw_params_alloca(&params);
+    rc = setup_pcm_struct( handle, params );
+    if (rc != OK) {
+        print_error_code( rc );
+        exit(1);
+    }
+
+    rc = register_device( handle, params, buffer );
+    if (rc != OK) {
+        print_error_code( rc );
+        exit(1);
+    }
+
+    // Frames wird auch in register device abgefragt und sollte eigentlich darüber bezogen werden
+    snd_pcm_hw_params_get_period_size(params, &frames, &dir);
+    size = frames * 4;
+
+
+    loops = 1000;
     while (loops > 0) {
         loops--;
+        t = clock();
         rc = snd_pcm_readi(handle, buffer, frames);
+        dt = clock() - t;
+        cycle = dt;
+        time_taken = ((double)dt)/CLOCKS_PER_SEC; // in seconds
+        printf("read: %f seconds\n", time_taken); 
+
         if (rc == -EPIPE) {
             fprintf(stderr, "overrun occured\n");
             snd_pcm_prepare(handle);
@@ -141,16 +191,30 @@ int main() {
             fprintf(stderr, "error from read: %s\n", snd_strerror(rc));
         }else if (rc != (int)frames) {
             fprintf(stderr, "short read, read %d frames\n", rc);
+        } else {
+            printf("Frames read: %i\n", rc);
         }
-        rc = write(1, buffer, size);
+        t = clock();
+        rc = write(fd, buffer, size);
         if (rc != size) {
             fprintf(stderr, "short write: wrote %d bytes\n", rc);
         }
+        dt = clock() - t;
+        cycle = cycle + dt;
+        time_taken = ((double)dt)/CLOCKS_PER_SEC; // in seconds
+        printf("write: %f seconds\n", time_taken); 
+        time_taken = ((double)cycle)/CLOCKS_PER_SEC; // in seconds
+        //printf("cycle: %f seconds\n", time_taken); 
     }
 
     snd_pcm_drain(handle);
     snd_pcm_close(handle);
+    close(fd);
     free(buffer);
 
     return 0;
+}
+
+int main() {
+    record_to_file();
 }
