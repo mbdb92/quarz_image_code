@@ -95,14 +95,19 @@ int setup_pcm_struct( snd_pcm_t *handle, snd_pcm_hw_params_t *params ) {
     unsigned int rate = RATE;
     printf("Rate is %i \n", rate);
     snd_pcm_uframes_t frames = FRAMES;
+    /*
+     * The initialisation of the pointer at this point didn't work, they weren't returned to
+     * the calling function. removing them out of the divice worked as intended
+    */
+    /*
     rc = snd_pcm_open( &handle, DEVICE, SND_PCM_STREAM_CAPTURE, SND_PCM_NONBLOCK );
     if (rc < 0)
         return PCM_OPEN_FAIL;
     snd_pcm_hw_params_alloca(&params);
+    */
     rc = snd_pcm_hw_params_any(handle, params);
     if (rc < 0)
         return HW_ANY_PARAMS_FAIL;
-
     rc = snd_pcm_hw_params_set_access(handle, params, SND_PCM_ACCESS_RW_INTERLEAVED);
     if (rc < 0)
         return HW_SET_ACCESS_FAIL;
@@ -121,20 +126,14 @@ int setup_pcm_struct( snd_pcm_t *handle, snd_pcm_hw_params_t *params ) {
     return OK;
 }
 
-int register_device ( snd_pcm_t *handle, snd_pcm_hw_params_t *params, char *buffer) {
-    int rc, dir, size;
-    snd_pcm_uframes_t frames;
-
+int seting_device_values ( snd_pcm_t *handle, snd_pcm_hw_params_t *params, snd_pcm_uframes_t *frames) {
+    int rc, dir;
     rc = snd_pcm_hw_params(handle, params);
     if (rc < 0)
         return HW_PARAMS_ERROR;
-    rc = snd_pcm_hw_params_get_period_size(params, &frames, &dir);
+    rc = snd_pcm_hw_params_get_period_size(params, frames, &dir);
     if (rc < 0)
         return HW_PARAMS_ERROR;
-    size = frames * 4;
-    buffer = (char *) malloc(size);
-    if (buffer == NULL)
-        return MALLOC_ERROR;
     return OK;
 }
 
@@ -155,26 +154,30 @@ int record_to_file () {
         exit(4);
     }
 
+    rc = snd_pcm_open( &handle, DEVICE, SND_PCM_STREAM_CAPTURE, SND_PCM_NONBLOCK );
+    if (rc < 0)
+        return PCM_OPEN_FAIL;
     // alloca hat keinen returnvalue da es ein Macro ist
-    //snd_pcm_hw_params_alloca(&params);
+    snd_pcm_hw_params_alloca(&params);
+
     rc = setup_pcm_struct( handle, params );
     if (rc != OK) {
         print_error_code( rc );
         exit(1);
     }
 
-    rc = register_device( handle, params, buffer );
+    rc = seting_device_values( handle, params, &frames );
     if (rc != OK) {
         print_error_code( rc );
         exit(1);
     }
-
-    // Frames wird auch in register device abgefragt und sollte eigentlich darüber bezogen werden
-    snd_pcm_hw_params_get_period_size(params, &frames, &dir);
     size = frames * 4;
+    buffer = (char *) malloc(size);
+    if (buffer == NULL)
+        return MALLOC_ERROR;
+    printf("frames: %i\n", frames);
 
-
-    loops = 1000;
+    loops = 2;
     while (loops > 0) {
         loops--;
         t = clock();
