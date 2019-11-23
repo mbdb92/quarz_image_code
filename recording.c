@@ -93,7 +93,9 @@ void print_error_code( int errnr ) {
 int setup_pcm_struct( snd_pcm_t *handle, snd_pcm_hw_params_t *params ) {
     int rc, dir;
     unsigned int rate = RATE;
+#ifdef DEBUG
     printf("Rate is %i \n", rate);
+#endif
     snd_pcm_uframes_t frames = FRAMES;
     /*
      * The initialisation of the pointer at this point didn't work, they weren't returned to
@@ -175,7 +177,9 @@ int record_to_file () {
     buffer = (char *) malloc(size);
     if (buffer == NULL)
         return MALLOC_ERROR;
+#ifdef DEBUG
     printf("frames: %i\n", frames);
+#endif
 
     loops = 2;
     while (loops > 0) {
