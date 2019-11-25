@@ -1,19 +1,4 @@
-#define ALSA_PCM_NEW_HW_PARAMS_API
-#define DEVICE "default"
-#define CHANNEL_NUMBER 2
-#define RATE 44100u
-#define FRAMES 32
-#define OK 0
-#define PCM_OPEN_FAIL 1
-#define HW_ANY_PARAMS_FAIL 2
-#define HW_SET_ACCESS_FAIL 3
-#define HW_SET_FORMAT_FAIL 4
-#define HW_SET_CHANNELS_FAIL 5
-#define HW_SET_RATE_FAIL 6
-#define HW_SET_PERIOD_FAIL 7
-#define HW_PARAMS_ERROR 8
-#define MALLOC_ERROR 9
-
+#include "recorder.h"
 #include <alsa/asoundlib.h>
 // for time function
 #include <time.h>
@@ -146,11 +131,13 @@ int record_to_file () {
     snd_pcm_hw_params_t *params;
     snd_pcm_uframes_t frames;
     char *buffer;
-    clock_t t, dt, cycle;
     int fd;
+#ifdef DEBUG
+    clock_t t, dt, cycle;
     double time_taken;
+#endif
 
-    fd = open("record.raw", O_WRONLY | O_CREAT);
+    fd = open("output.raw", O_WRONLY | O_CREAT);
     if (fd == -1) {
         fprintf(stderr, "unable to open file: %s\n", strerror(errno));
         exit(4);
@@ -184,12 +171,16 @@ int record_to_file () {
     loops = 2;
     while (loops > 0) {
         loops--;
+#ifdef DEBUG
         t = clock();
+#endif
         rc = snd_pcm_readi(handle, buffer, frames);
+#ifdef DEBUG
         dt = clock() - t;
         cycle = dt;
         time_taken = ((double)dt)/CLOCKS_PER_SEC; // in seconds
         printf("read: %f seconds\n", time_taken); 
+#endif
 
         if (rc == -EPIPE) {
             fprintf(stderr, "overrun occured\n");
@@ -199,19 +190,25 @@ int record_to_file () {
         }else if (rc != (int)frames) {
             fprintf(stderr, "short read, read %d frames\n", rc);
         } else {
+#ifdef DEBUG
             printf("Frames read: %i\n", rc);
+#endif
         }
+#ifdef DEBUG
         t = clock();
+#endif
         rc = write(fd, buffer, size);
         if (rc != size) {
             fprintf(stderr, "short write: wrote %d bytes\n", rc);
         }
+#ifdef DEBUG
         dt = clock() - t;
         cycle = cycle + dt;
         time_taken = ((double)dt)/CLOCKS_PER_SEC; // in seconds
         printf("write: %f seconds\n", time_taken); 
         time_taken = ((double)cycle)/CLOCKS_PER_SEC; // in seconds
-        //printf("cycle: %f seconds\n", time_taken); 
+        printf("cycle: %f seconds\n", time_taken); 
+#endif
     }
 
     snd_pcm_drain(handle);
