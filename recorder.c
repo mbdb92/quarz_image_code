@@ -1,7 +1,7 @@
 #include "recorder.h"
 #include <alsa/asoundlib.h>
 // for time function
-#ifdef DEBUG
+#ifdef VERBOSE
 #include <time.h>
 #endif
 // for file access
@@ -108,9 +108,15 @@ int setup_pcm_struct( snd_pcm_t *handle, snd_pcm_hw_params_t *params ) {
 
 int seting_device_values ( snd_pcm_t *handle, snd_pcm_hw_params_t *params ) {
     int rc, dir;
+#ifdef DEBUG
+    printf("Setting Params\n");
+#endif
     rc = snd_pcm_hw_params(handle, params);
     if (rc < 0)
         return HW_PARAMS_ERROR;
+#ifdef DEBUG
+    printf("Prepare Device\n");
+#endif
     snd_pcm_prepare( handle );
     if (rc < 0)
         return HW_PARAMS_ERROR;
@@ -123,7 +129,10 @@ int seting_device_values ( snd_pcm_t *handle, snd_pcm_hw_params_t *params ) {
  */
 snd_pcm_t * open_device( const char *name, snd_pcm_stream_t stream, int mode ) {
     int rc;
-    snd_pcm_t *handle;
+    static snd_pcm_t *handle;
+#ifdef DEBUG
+    printf("Open Device\n");
+#endif
     rc = snd_pcm_open( &handle, DEVICE, SND_PCM_STREAM_CAPTURE, SND_PCM_NONBLOCK );
     if (rc < 0) {
         print_error_code( PCM_OPEN_FAIL );
@@ -133,14 +142,14 @@ snd_pcm_t * open_device( const char *name, snd_pcm_stream_t stream, int mode ) {
 }
 
 int record_to_file () {
-    long loops;
-    int rc, dir, size;
-    snd_pcm_t *handle;
-    snd_pcm_hw_params_t *params;
-    snd_pcm_uframes_t frames;
-    char *buffer;
-    int fd;
-#ifdef DEBUG
+    static long loops;
+    static int rc, dir, size;
+    static snd_pcm_t *handle;
+    static snd_pcm_hw_params_t *params;
+    static snd_pcm_uframes_t frames;
+    static char *buffer;
+    static int fd;
+#ifdef VERBOSE
     clock_t t, dt, cycle;
     double time_taken;
 #endif
@@ -154,34 +163,35 @@ int record_to_file () {
     handle = open_device( DEVICE, SND_PCM_STREAM_CAPTURE, SND_PCM_NONBLOCK );
     if (handle == NULL)
         exit(1);
-#ifdef DEBUG
+#ifdef VERBOSE
     check_state( handle );
 #endif
     // alloca hat keinen returnvalue da es ein Macro ist
     snd_pcm_hw_params_alloca(&params);
 
+#ifdef DEBUG
+    printf("Filling PCM Struct\n");
+#endif
     rc = setup_pcm_struct( handle, params );
     if (rc != OK) {
         print_error_code( rc );
         exit(1);
     }
-#ifdef DEBUG
-    check_state( handle );
-#endif
 
     rc = seting_device_values( handle, params );
     if (rc != OK) {
         print_error_code( rc );
         exit(1);
     }
-#ifdef DEBUG
-    check_state( handle );
-#endif
+
     rc = snd_pcm_hw_params_get_period_size(params, &frames, &dir);
     if (rc < 0) {
         print_error_code( rc );
         exit(1);
     }
+#ifdef DEBUG
+    printf("Allocating Buffer\n");
+#endif
     size = frames * 4;
     buffer = (char *) malloc(size);
     if (buffer == NULL){
@@ -189,18 +199,17 @@ int record_to_file () {
         return MALLOC_ERROR;
     }
 #ifdef DEBUG
-    printf("frames: %i\n", frames);
+    printf("Entering Loop\n");
 #endif
 
     loops = 2;
     while (loops > 0) {
         loops--;
-#ifdef DEBUG
+#ifdef VERBOSE
         t = clock();
 #endif
         rc = snd_pcm_readi(handle, buffer, frames);
-#ifdef DEBUG
-        check_state( handle );
+#ifdef VERBOSE
         dt = clock() - t;
         cycle = dt;
         time_taken = ((double)dt)/CLOCKS_PER_SEC; // in seconds
@@ -219,14 +228,14 @@ int record_to_file () {
             printf("Frames read: %i\n", rc);
 #endif
         }
-#ifdef DEBUG
+#ifdef VERBOSE
         t = clock();
 #endif
         rc = write(fd, buffer, size);
         if (rc != size) {
             fprintf(stderr, "short write: wrote %d bytes\n", rc);
         }
-#ifdef DEBUG
+#ifdef VERBOSE
         dt = clock() - t;
         cycle = cycle + dt;
         time_taken = ((double)dt)/CLOCKS_PER_SEC; // in seconds

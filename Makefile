@@ -5,6 +5,9 @@ FILE = recorder.c
 
 LIBS=-lasound
 
+verbose: $(FILE)
+	$(CC) $(FILE) -o $(OBJ) $(CFLAGS) -DVERBOSE $(LIBS)
+
 debug: $(FILE)
 	$(CC) $(FILE) -o $(OBJ) $(CFLAGS) -DDEBUG $(LIBS)
 
