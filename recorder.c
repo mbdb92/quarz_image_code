@@ -1,7 +1,9 @@
 #include "recorder.h"
 #include <alsa/asoundlib.h>
 // for time function
+#ifdef DEBUG
 #include <time.h>
+#endif
 // for file access
 #include <stdio.h>
 #include <sys/stat.h>
@@ -78,19 +80,10 @@ void print_error_code( int errnr ) {
 int setup_pcm_struct( snd_pcm_t *handle, snd_pcm_hw_params_t *params ) {
     int rc, dir;
     unsigned int rate = RATE;
-#ifdef DEBUG
-    printf("Rate is %i \n", rate);
-#endif
     snd_pcm_uframes_t frames = FRAMES;
     /*
      * The initialisation of the pointer at this point didn't work, they weren't returned to
-     * the calling function. removing them out of the divice worked as intended
-    */
-    /*
-    rc = snd_pcm_open( &handle, DEVICE, SND_PCM_STREAM_CAPTURE, SND_PCM_NONBLOCK );
-    if (rc < 0)
-        return PCM_OPEN_FAIL;
-    snd_pcm_hw_params_alloca(&params);
+     * the calling function. removing them out of the function worked as intended
     */
     rc = snd_pcm_hw_params_any(handle, params);
     if (rc < 0)
@@ -113,15 +106,30 @@ int setup_pcm_struct( snd_pcm_t *handle, snd_pcm_hw_params_t *params ) {
     return OK;
 }
 
-int seting_device_values ( snd_pcm_t *handle, snd_pcm_hw_params_t *params, snd_pcm_uframes_t *frames) {
+int seting_device_values ( snd_pcm_t *handle, snd_pcm_hw_params_t *params ) {
     int rc, dir;
     rc = snd_pcm_hw_params(handle, params);
     if (rc < 0)
         return HW_PARAMS_ERROR;
-    rc = snd_pcm_hw_params_get_period_size(params, frames, &dir);
+    snd_pcm_prepare( handle );
     if (rc < 0)
         return HW_PARAMS_ERROR;
     return OK;
+}
+
+/*
+ * This function is a wrapper around snd_pcm_open so it returns the pointer
+ * I'm using this, so I can define it at one point and reuse the function
+ */
+snd_pcm_t * open_device( const char *name, snd_pcm_stream_t stream, int mode ) {
+    int rc;
+    snd_pcm_t *handle;
+    rc = snd_pcm_open( &handle, DEVICE, SND_PCM_STREAM_CAPTURE, SND_PCM_NONBLOCK );
+    if (rc < 0) {
+        print_error_code( PCM_OPEN_FAIL );
+        return NULL;
+    }
+    return handle;
 }
 
 int record_to_file () {
@@ -143,9 +151,12 @@ int record_to_file () {
         exit(4);
     }
 
-    rc = snd_pcm_open( &handle, DEVICE, SND_PCM_STREAM_CAPTURE, SND_PCM_NONBLOCK );
-    if (rc < 0)
-        return PCM_OPEN_FAIL;
+    handle = open_device( DEVICE, SND_PCM_STREAM_CAPTURE, SND_PCM_NONBLOCK );
+    if (handle == NULL)
+        exit(1);
+#ifdef DEBUG
+    check_state( handle );
+#endif
     // alloca hat keinen returnvalue da es ein Macro ist
     snd_pcm_hw_params_alloca(&params);
 
@@ -154,16 +165,29 @@ int record_to_file () {
         print_error_code( rc );
         exit(1);
     }
+#ifdef DEBUG
+    check_state( handle );
+#endif
 
-    rc = seting_device_values( handle, params, &frames );
+    rc = seting_device_values( handle, params );
     if (rc != OK) {
+        print_error_code( rc );
+        exit(1);
+    }
+#ifdef DEBUG
+    check_state( handle );
+#endif
+    rc = snd_pcm_hw_params_get_period_size(params, &frames, &dir);
+    if (rc < 0) {
         print_error_code( rc );
         exit(1);
     }
     size = frames * 4;
     buffer = (char *) malloc(size);
-    if (buffer == NULL)
+    if (buffer == NULL){
+        print_error_code( MALLOC_ERROR );
         return MALLOC_ERROR;
+    }
 #ifdef DEBUG
     printf("frames: %i\n", frames);
 #endif
@@ -176,6 +200,7 @@ int record_to_file () {
 #endif
         rc = snd_pcm_readi(handle, buffer, frames);
 #ifdef DEBUG
+        check_state( handle );
         dt = clock() - t;
         cycle = dt;
         time_taken = ((double)dt)/CLOCKS_PER_SEC; // in seconds
