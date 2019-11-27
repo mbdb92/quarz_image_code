@@ -5,6 +5,9 @@ FILE = recorder.c
 
 LIBS=-lasound
 
+nosub: $(FILE)
+	$(CC) $(FILE) -o $(OBJ) $(CFLAGS) -DNOSUB -DDEBUG -DVERBOSE $(LIBS)
+
 verbose: $(FILE)
 	$(CC) $(FILE) -o $(OBJ) $(CFLAGS) -DVERBOSE $(LIBS)
 
