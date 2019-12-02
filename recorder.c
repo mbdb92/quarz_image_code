@@ -1,4 +1,19 @@
-#include "recorder.h"
+//#include "recorder.h"
+#define ALSA_PCM_NEW_HW_PARAMS_API
+#define DEVICE "default"
+#define CHANNEL_NUMBER 2
+#define RATE 44100u
+#define FRAMES 32
+#define OK 0
+#define PCM_OPEN_FAIL 1
+#define HW_ANY_PARAMS_FAIL 2
+#define HW_SET_ACCESS_FAIL 3
+#define HW_SET_FORMAT_FAIL 4
+#define HW_SET_CHANNELS_FAIL 5
+#define HW_SET_RATE_FAIL 6
+#define HW_SET_PERIOD_FAIL 7
+#define HW_PARAMS_ERROR 8
+#define MALLOC_ERROR 9
 #include <alsa/asoundlib.h>
 // for time function
 #ifdef VERBOSE
@@ -152,7 +167,7 @@ snd_pcm_t * open_device( const char *name, snd_pcm_stream_t stream, int mode ) {
 #ifdef DEBUG
     printf("Open Device\n");
 #endif
-    rc = snd_pcm_open( &handle, DEVICE, SND_PCM_STREAM_CAPTURE, SND_PCM_NONBLOCK );
+    rc = snd_pcm_open( &handle, DEVICE, SND_PCM_STREAM_CAPTURE, mode );
     if (rc < 0) {
         print_error_code( PCM_OPEN_FAIL );
     }
@@ -175,10 +190,6 @@ int record_to_file () {
     clock_t t, dt, cycle;
     double time_taken;
 #endif
-#ifdef NOSUB    
-    unsigned int rate = RATE;
-    frames = FRAMES;
-#endif
 
 
 
@@ -196,17 +207,10 @@ int record_to_file () {
     /*
      * This block takes care of the device initialisation
      */
-#ifdef NOSUB
-    rc = snd_pcm_open( &handle, DEVICE, SND_PCM_STREAM_CAPTURE, SND_PCM_NONBLOCK );
+    handle = open_device( DEVICE, SND_PCM_STREAM_CAPTURE, 0 );
     if (rc < 0) {
         print_error_code( PCM_OPEN_FAIL );
     }
-#endif /*NOSUB*/
-#ifndef NOSUB
-    handle = open_device( DEVICE, SND_PCM_STREAM_CAPTURE, SND_PCM_NONBLOCK );
-    if (handle == NULL)
-        exit(1);
-#endif /*N-NOSUB*/
 #ifdef VERBOSE
     check_state( handle );
 #endif
@@ -218,45 +222,6 @@ int record_to_file () {
     /*
      * This Block prepares the device for usage
      */
-#ifdef NOSUB
-    rc = snd_pcm_hw_params_any(handle, params);
-    if (rc < 0) {
-        print_error_code( HW_ANY_PARAMS_FAIL );
-        exit(1);
-    }
-    rc = snd_pcm_hw_params_set_access(handle, params, SND_PCM_ACCESS_RW_INTERLEAVED);
-    if (rc < 0) {
-        print_error_code( HW_SET_ACCESS_FAIL );
-        exit(1);
-    }
-    rc = snd_pcm_hw_params_set_format(handle, params, SND_PCM_FORMAT_S16_LE);
-    if (rc < 0) {
-        print_error_code( HW_SET_FORMAT_FAIL );
-        exit(1);
-    }
-    rc = snd_pcm_hw_params_set_channels(handle, params, CHANNEL_NUMBER);
-    if (rc < 0) {
-        print_error_code( HW_SET_CHANNELS_FAIL );
-        exit(1);
-    }
-    rc = snd_pcm_hw_params_set_rate_near(handle, params, &rate, &dir);
-    if (rc < 0) {
-        print_error_code( HW_SET_RATE_FAIL );
-        exit(1);
-    }
-    rc = snd_pcm_hw_params_set_period_size_near(handle, params, &frames, &dir);
-    if (rc < 0) {
-        print_error_code( HW_SET_PERIOD_FAIL );
-        exit(1);
-    }
-    rc = snd_pcm_hw_params(handle, params);
-    if (rc < 0) {
-        print_error_code( HW_PARAMS_ERROR );
-        exit(1);
-    }
-#endif /*NOSUB*/
-
-#ifndef NOSUB
 #ifdef DEBUG
     printf("Preparing Device\n");
 #endif
@@ -265,7 +230,6 @@ int record_to_file () {
         print_error_code( rc );
         exit(1);
     }
-#endif /*N-NOSUB*/
 
 
 
