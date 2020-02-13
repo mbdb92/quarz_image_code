@@ -3,7 +3,7 @@ CFLAGS=
 OBJ = quarz.out
 FILE = recorder.c
 
-LIBS=-lasound
+LIBS=-lasound -lfftw3 -lm
 
 verbose: $(FILE)
 	$(CC) $(FILE) -o $(OBJ) $(CFLAGS) -DVERBOSE $(LIBS)

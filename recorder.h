@@ -3,7 +3,7 @@
 
 #define ALSA_PCM_NEW_HW_PARAMS_API
 #define DEVICE "default"
-#define CHANNEL_NUMBER 2
+#define CHANNEL_NUMBER 1
 #define RATE 44100u
 #define FRAMES 32
 #define OK 0

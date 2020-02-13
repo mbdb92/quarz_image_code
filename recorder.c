@@ -1,19 +1,4 @@
-//#include "recorder.h"
-#define ALSA_PCM_NEW_HW_PARAMS_API
-#define DEVICE "default"
-#define CHANNEL_NUMBER 2
-#define RATE 44100u
-#define FRAMES 32
-#define OK 0
-#define PCM_OPEN_FAIL 1
-#define HW_ANY_PARAMS_FAIL 2
-#define HW_SET_ACCESS_FAIL 3
-#define HW_SET_FORMAT_FAIL 4
-#define HW_SET_CHANNELS_FAIL 5
-#define HW_SET_RATE_FAIL 6
-#define HW_SET_PERIOD_FAIL 7
-#define HW_PARAMS_ERROR 8
-#define MALLOC_ERROR 9
+#include "recorder.h"
 #include <alsa/asoundlib.h>
 // for time function
 #ifdef VERBOSE
@@ -23,6 +8,10 @@
 #include <stdio.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+// For fftw
+#include <complex.h>
+#include <fftw3.h>
+
 
 static snd_pcm_t * Handle;
 
@@ -178,6 +167,8 @@ snd_pcm_t * open_device( const char *name, snd_pcm_stream_t stream, int mode ) {
 }
 #endif /*N-NOSUB*/
 
+
+
 int record_to_file () {
     static long loops;
     static int rc, dir, size;
@@ -190,13 +181,15 @@ int record_to_file () {
     clock_t t, dt, cycle;
     double time_taken;
 #endif
+    fftw_complex *in, *out;
+    fftw_plan p;
 
 
 
     /*
      * This Block takes care of the filehandling
      */
-    fd = open("output.raw", O_WRONLY | O_CREAT);
+    fd = open("output.raw", O_RDWR | O_CREAT);
     if (fd == -1) {
         fprintf(stderr, "unable to open file: %s\n", strerror(errno));
         exit(4);
@@ -245,16 +238,15 @@ int record_to_file () {
         exit(1);
     }
     size = frames * 4;
+#ifdef VERBOSE
+    printf("Size of Buffer is %i", size);
+#endif /*VERBOSE*/
     buffer = (char *) malloc(size);
     if (buffer == NULL){
         print_error_code( MALLOC_ERROR );
         return MALLOC_ERROR;
     }
 #ifdef DEBUG
-#ifndef NOSUB
-    if ( Handle == handle )
-        printf("Handle are equal \n");
-#endif /*N_NOSUB*/
     printf("Entering Loop\n");
 #endif
 
@@ -264,7 +256,7 @@ int record_to_file () {
 
     snd_pcm_hw_params_free(params);
 
-    loops = 2;
+    loops = 1;
     while (loops > 0) {
         loops--;
 #ifdef VERBOSE
@@ -293,6 +285,7 @@ int record_to_file () {
 #ifdef VERBOSE
         t = clock();
 #endif
+        int 
         rc = write(fd, buffer, size);
         if (rc != size) {
             fprintf(stderr, "short write: wrote %d bytes\n", rc);
@@ -306,6 +299,21 @@ int record_to_file () {
         printf("cycle: %f seconds\n", time_taken); 
 #endif
     }
+
+    int N = 20000;
+    in = (fftw_complex*) fftw_malloc( sizeof( fftw_complex ) * N );
+    out = (fftw_complex*) fftw_malloc( sizeof( fftw_complex ) * N );
+    printf("Creating plani\n");
+    p = fftw_plan_dft_1d( N, in, out, FFTW_FORWARD, FFTW_ESTIMATE );
+
+    read( fd, in, sizeof( fftw_complex ) * N);
+
+    printf("Executing plan\n");
+    fftw_execute(p);
+
+    fftw_destroy_plan(p);
+    fftw_free(in);
+    fftw_free(out);
 
     snd_pcm_drain(handle);
     snd_pcm_close(handle);
