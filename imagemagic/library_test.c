@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -6,40 +7,17 @@
 #include <MagickWand/MagickWand.h>
 
 int main() {
-    /*
-    ExceptionInfo *exception;
-    Image *image;
-    ImageInfo *image_info;
-    int pixels[25];
-    MagickBooleanType returnval;
-
-    for( int i = 0; i < 25; i++ ){
-        pixels[i] = 10*i;
-    }
-    image_info = AcquireMagickInfo( , "testimage"
-
-    MagickCoreGenesis( *argv, MagickTrue);
-    image = ConstituteImage( 5, 5, "I", IntegerPixel, &pixels, exception);
-
-    returnval = WriteImage( , image, exception)
-    */
     
     MagickWand *m_wand;
     DrawingWand *d_wand;
     PixelWand *c_wand;
     unsigned long size;
     char *color;
+    bool retval;
 
     color = malloc( strlen ("#123456") );
 
     size = 100;
-    /*
-    int i;
-    double points[size];
-    for( i = 0; i < size; i++ ) {
-        points[i] = 255/i;
-    }
-    */
 
     MagickWandGenesis();
 
@@ -56,9 +34,11 @@ int main() {
     for( int i = 0; i < (size*size); i++ ) {
         sprintf( color, "#00%x", i );
         printf("%s\n", color);
-        PixelSetColor(c_wand, color);
-        DrawSetStrokeColor(d_wand, c_wand);
-        DrawColor( d_wand, (double) i, (double) i, PointMethod );
+        retval = PixelSetColor(c_wand, color);
+        printf("%d\n", retval);
+        DrawSetFillColor(d_wand, c_wand);
+        DrawPoint( d_wand, (double) i, (double) i );
+        //DrawColor( d_wand, (double) i, (double) i, PointMethod );
     }
 
     MagickDrawImage(m_wand, d_wand);
