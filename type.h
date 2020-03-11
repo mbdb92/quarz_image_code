@@ -5,6 +5,12 @@
 #include <MagickWand/MagickWand.h>
 #include <stdbool.h>
 
+#define OK 0
+#define E_MAL_FFT_IN 1
+#define E_MAL_FFT_OUT 2
+#define E_ADD_FFT_PLAN 3
+#define E_W_COS 4
+
 struct fft_params {
     fftw_plan plan;
     int fft_size;

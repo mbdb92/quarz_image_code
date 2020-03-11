@@ -45,7 +45,7 @@ int run_magick_from_fft( struct magick_params *magick, struct fft_data *data, un
 
     for( int i = 0; i < size; i++ ) {
         sprintf( magick->color, "#00%x", (unsigned int) data->fft_out[i] );
-        printf( "%s\n", magick->color );
+//        printf( "%s\n", magick->color );
         DrawSetFillColor(magick->d_wand, magick->c_wand);
         DrawPoint( magick->d_wand, (double) i, 1 );
     }

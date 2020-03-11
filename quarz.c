@@ -14,12 +14,12 @@ int main() {
     setup_drawing( &params->magick );
 
     run_fft( &params->fft, &data->fft );
-    run_magick_from_fft( &params->magick, &data->fft, (unsigned long) params->fft.fft_size );
+//    run_magick_from_fft( &params->magick, &data->fft, (unsigned long) params->fft.fft_size );
 
     destroy_fft( &params->fft, &data->fft );
     destroy_drawing( &params->magick );
 
     free(params);
-    free(params);
+    free(data);
     return 0;
 }
