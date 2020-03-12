@@ -11,7 +11,9 @@
 #include <malloc.h>
 #include "fft.h"
 
-
+/*
+ * This Function sets up the needed structs
+ */
 int create_fft( struct fft_params *fft_p, struct fft_data *fft_d ) {
     fft_p->size = SIZE;
     fft_p->rank = RANK;
@@ -38,17 +40,13 @@ int destroy_fft( struct fft_params *fft_p, struct fft_data *fft_d ) {
 
 
 int run_fft( struct fft_params *fft_p, struct fft_data *fft_d ) {
-//    fftw_complex *fft_out;
-    fftw_complex *in, *out;
+    fftw_complex *in;
     fftw_plan plan;
-    int N = 100;
     double x, val;
     float c;
     val = PI / 180;
     FILE *gnuplot = popen("gnuplot -persistent", "w");
     FILE *outfile = fopen("values.raw", "w+");
-
-//    fft_out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * fft_p->size);
 
     /*
     printf("%li\n", malloc_usable_size(*fft_d->fft_in));
@@ -57,11 +55,18 @@ int run_fft( struct fft_params *fft_p, struct fft_data *fft_d ) {
     printf("%li\n", malloc_usable_size(*out));
 */
 
+    /*
+     * This is currently needed, as using the fft_d->fft_in array doesn't work
+     * TODO: Fix error
+     */
     in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * fft_p->size);
-    out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * fft_p->size);
     //plan = fftw_plan_dft_1d(fft_p->size, fft_d->fft_in, fft_d->fft_out, FFTW_FORWARD, FFTW_ESTIMATE);
     plan = fftw_plan_r2r_1d(fft_p->size, fft_d->fft_in, fft_d->fft_out, FFTW_DHT, FFTW_ESTIMATE);
 
+    /*
+     * this three for-loops generate a mixed cos function
+     * Used for testing and controlled dev
+     */
     for( int i = 0; i < fft_p->size; i++ ){
         x = 1.0 * i;
         c = cos(x*val);
@@ -87,10 +92,13 @@ int run_fft( struct fft_params *fft_p, struct fft_data *fft_d ) {
         x = 5.0 * i;
         fft_d->fft_in[i][0] = fft_d->fft_in[i][0] + cos(x*val);
         in[i][0] = in[i][0] + cos(x*val);
-        printf("%f\n", in[i][0]);
-        printf("%f\n", fft_d->fft_in[i][0]);
+//        printf("%f\n", in[i][0]);
+//        printf("%f\n", fft_d->fft_in[i][0]);
     }
     
+    /*
+     * The previous created plan gets executed here
+     */
 //    plan = fftw_plan_dft_1d(fft_p->size, fft_d->fft_in, fft_d->fft_out, FFTW_FORWARD, FFTW_ESTIMATE);
 //    fftw_print_plan(fft_p->plan);
     fftw_execute(plan);
@@ -103,6 +111,11 @@ int run_fft( struct fft_params *fft_p, struct fft_data *fft_d ) {
     }
 */
 
+    /*
+     * the gnu-plot code is for debugging,
+     * not needed in final code
+     * TODO Remove gnuplot
+     */
     fprintf(gnuplot, "plot '-'\n");
 
     for( int j = 0; j < fft_p->size; j++){
@@ -118,7 +131,6 @@ int run_fft( struct fft_params *fft_p, struct fft_data *fft_d ) {
 
     fftw_destroy_plan(plan);
     fftw_free(in);
-    fftw_free(out);
 
     return OK;
 }
