@@ -5,6 +5,8 @@ int setup_drawing( struct magick_params *adr );
 
 int destroy_drawing( struct magick_params *adr );
 
+int find_min_max( fftw_complex *data, double *max, double *min, unsigned long size );
+
 int run_magick_from_fft( struct magick_params *magick, struct fft_data *data, unsigned long size );
 
 //int run_magick_test( struct magick_params *adr );

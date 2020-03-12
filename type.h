@@ -13,7 +13,8 @@
 
 struct fft_params {
     fftw_plan plan;
-    int fft_size;
+    int size;
+    int rank;
 };
 
 struct magick_params {
@@ -21,6 +22,8 @@ struct magick_params {
     DrawingWand *d_wand;
     PixelWand *c_wand;
     char *color;
+    double max;
+    double min;
 };
 
 struct quarz_params {

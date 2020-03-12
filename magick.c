@@ -5,11 +5,12 @@
 #include <stdbool.h>
 #include <string.h>
 #include <time.h>
-// Default Library inclution
-#include <MagickWand/MagickWand.h>
 // Local defined files
 #include "type.h"
 #include "magick.h"
+
+#define X_CORD 1
+#define BYTE_SIZE 256
 
 int setup_drawing( struct magick_params *magick ) {
     MagickWandGenesis();
@@ -19,6 +20,8 @@ int setup_drawing( struct magick_params *magick ) {
     magick->c_wand = NewPixelWand();
 
     magick->color = malloc( strlen("#123456") );
+    magick->max = 0;
+    magick->min = 0;
 
     return 0;
 }
@@ -34,8 +37,24 @@ int destroy_drawing( struct magick_params *magick ) {
     return 0;
 }
 
-int run_magick_from_fft( struct magick_params *magick, struct fft_data *data, unsigned long size ) {
+int find_min_max( fftw_complex *data, double *max, double *min, unsigned long size ) {
+    *max = 0;
+    *min = 0;
+
+    for( int i = 0; i < size; i++ ){
+        if( (double) *data[i] > *max )
+            *max = (double) *data[i];
+
+        if( (double) *data[i] < *min )
+            *min = (double) *data[i];
+    }
+    return OK;
+}
+
+int run_magick_from_fft( struct magick_params *magick, struct fft_data *fft_d, unsigned long size ) {
     bool retval;
+    double divider_green;
+    unsigned int color_green;
 
     PixelSetColor( magick->c_wand, "white" );
     MagickNewImage( magick->m_wand, size, 1, magick->c_wand );
@@ -43,37 +62,26 @@ int run_magick_from_fft( struct magick_params *magick, struct fft_data *data, un
     DrawSetStrokeOpacity( magick->d_wand, 1 );
     DrawSetStrokeWidth( magick->d_wand, 1 );
 
-    for( int i = 0; i < size; i++ ) {
-        sprintf( magick->color, "#00%x", (unsigned int) data->fft_out[i] );
-//        printf( "%s\n", magick->color );
-        DrawSetFillColor(magick->d_wand, magick->c_wand);
-        DrawPoint( magick->d_wand, (double) i, 1 );
-    }
-
-    MagickDrawImage(magick->m_wand, magick->d_wand);
-    MagickWriteImage(magick->m_wand, "test.jpg");
-
-    return 0;
-}
-
+    find_min_max( fft_d->fft_out, &magick->max, &magick->min, size);
+    if( magick->min < 0 )
+        divider_green = (magick->max + fabs(magick->min)) / BYTE_SIZE;
+    else
+        divider_green = (magick->max - fabs(magick->min)) / BYTE_SIZE;
 /*
-int run_magick_test( struct magick_params *magick ) {
-    unsigned long size;
-    bool retval;
-
-    size = 10;
-
-    PixelSetColor( magick->c_wand, "white" );
-    MagickNewImage( magick->m_wand, size, size, magick->c_wand );
-
-    DrawSetStrokeOpacity( magick->d_wand, 1 );
-    DrawSetStrokeWidth( magick->d_wand, 1 );
-
+    printf("Going color\n");
+    printf( "%f\n", divider_green);
+    printf( "%f, %f\n", magick->max, magick->min);
+    */
     for( int i = 0; i < size; i++ ) {
-        sprintf( magick->color, "#00%x", i );
-        retval = PixelSetColor(magick->c_wand, magick->color);
+        color_green = (unsigned int)( (fft_d->fft_out[i][0] + fabs(magick->min)) / divider_green );
+        if( color_green < 16 && color_green >= 0 )
+            sprintf( magick->color, "#000%x%s", color_green, "00" );
+        else
+            sprintf( magick->color, "#00%x%s", color_green, "00" );
+//        printf( "%i\n", color_green);
+        printf( "%s\n", magick->color );
         DrawSetFillColor(magick->d_wand, magick->c_wand);
-        DrawPoint( magick->d_wand, (double) i, (double) i );
+        DrawPoint( magick->d_wand, X_CORD, (double) i );
     }
 
     MagickDrawImage(magick->m_wand, magick->d_wand);
@@ -81,5 +89,4 @@ int run_magick_test( struct magick_params *magick ) {
 
     return 0;
 }
-*/
 
