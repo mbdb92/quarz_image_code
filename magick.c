@@ -10,7 +10,7 @@
 #include "magick.h"
 
 #define X_CORD 1
-#define BYTE_SIZE 256
+#define BYTE_SIZE 255
 
 int setup_drawing( struct magick_params *magick ) {
     MagickWandGenesis();
