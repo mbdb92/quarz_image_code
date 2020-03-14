@@ -22,11 +22,14 @@ int setup_drawing( struct magick_params *magick ) {
     magick->d_wand = NewDrawingWand();
     magick->c_wand = NewPixelWand();
 
-    magick->color = malloc( strlen("#123456") );
+    magick->color = malloc( 8 * sizeof(char) );
+    if( magick->color == NULL )
+        return E_MAL_MAGICK_COLOR;
+
     magick->max = 0;
     magick->min = 0;
 
-    return 0;
+    return OK;
 }
 
 /*
@@ -48,16 +51,16 @@ int destroy_drawing( struct magick_params *magick ) {
  * This is needed, to calculate the correct value for the color. To make the rest of the code
  * more readable, it's moved here
  */
-int find_min_max( fftw_complex *data, double *max, double *min, unsigned long size ) {
+int find_min_max( double *data, double *max, double *min, unsigned long size ) {
     *max = 0;
     *min = 0;
 
     for( int i = 0; i < size; i++ ){
-        if( (double) *data[i] > *max )
-            *max = (double) *data[i];
+        if( data[i] > *max )
+            *max = data[i];
 
-        if( (double) *data[i] < *min )
-            *min = (double) *data[i];
+        if( data[i] < *min )
+            *min = data[i];
     }
     return OK;
 }
@@ -69,10 +72,11 @@ int run_magick_from_fft( struct magick_params *magick, struct fft_data *fft_d, u
     bool retval;
     double divider_green;
     unsigned int color_green;
+//    *magick->color = "#FFFFFF";
 
     // Adds the backround, black so colors can be seen better
     PixelSetColor( magick->c_wand, "black" );
-    MagickNewImage( magick->m_wand, size, 1, magick->c_wand );
+    MagickNewImage( magick->m_wand, X_CORD, size, magick->c_wand );
 
     // Set ups some basic wand valus
     // TODO: Maybe move this to setup function
@@ -87,26 +91,34 @@ int run_magick_from_fft( struct magick_params *magick, struct fft_data *fft_d, u
         divider_green = (magick->max + fabs(magick->min)) / BYTE_SIZE;
     else
         divider_green = (magick->max - fabs(magick->min)) / BYTE_SIZE;
-/*
+
     printf("Going color\n");
     printf( "%f\n", divider_green);
     printf( "%f, %f\n", magick->max, magick->min);
-    */
+
 
     // Iteartion over the output value
     for( int i = 0; i < size; i++ ) {
         // Converts the double value in fft_out into an usigned int
         // The shift by magick->min is needed to have no negative values
         // This is needed to get the hex value
-        color_green = (unsigned int)( (fft_d->fft_out[i][0] + fabs(magick->min)) / divider_green );
+        color_green = (unsigned int)( (fft_d->fft_out[i] + fabs(magick->min)) / divider_green );
+//        printf("%f\n", fft_d->fft_in[i]);
         // Sets the correct color string
         // Padding if the hex value would be single digit
-        if( color_green < 16 && color_green >= 0 )
-            sprintf( magick->color, "#000%x%s", color_green, "00" );
-        else
-            sprintf( magick->color, "#00%x%s", color_green, "00" );
 //        printf( "%i\n", color_green);
+        if( color_green < 16 && color_green >= 0 ) {
+            sprintf( magick->color, "#000%x%s", color_green, "00" );
+        } else {
+            sprintf( magick->color, "#00%x%s", color_green, "00" );
+        }
 //        printf( "%s\n", magick->color );
+        // This realy sets the color!
+        retval = PixelSetColor(magick->c_wand, magick->color);
+        if( retval != true ){
+            return E_SET_COLOR;
+        }
+//        printf("%d\n", retval);
         // This should draw the correct color
         DrawSetFillColor(magick->d_wand, magick->c_wand);
         DrawPoint( magick->d_wand, X_CORD, (double) i );

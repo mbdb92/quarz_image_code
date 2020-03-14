@@ -17,14 +17,15 @@
 int create_fft( struct fft_params *fft_p, struct fft_data *fft_d ) {
     fft_p->size = SIZE;
     fft_p->rank = RANK;
-    fft_d->fft_in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * fft_p->size);
+    fft_d->fft_in = (double*) fftw_malloc(sizeof(fftw_complex) * fft_p->size);
     if (fft_d->fft_in == 0)
         return E_MAL_FFT_IN;
-    fft_d->fft_out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * fft_p->size);
+    fft_d->fft_out = (double*) fftw_malloc(sizeof(fftw_complex) * fft_p->size);
     if (fft_d->fft_out == 0)
         return E_MAL_FFT_OUT;
 
-    fft_p->plan = fftw_plan_dft_1d(fft_p->size, fft_d->fft_in, fft_d->fft_out, FFTW_FORWARD, FFTW_ESTIMATE);
+    //fft_p->plan = fftw_plan_dft_1d(fft_p->size, fft_d->fft_in, fft_d->fft_out, FFTW_FORWARD, FFTW_ESTIMATE);
+    fft_p->plan = fftw_plan_r2r_1d(fft_p->size, fft_d->fft_in, fft_d->fft_out, FFTW_DHT, FFTW_ESTIMATE);
     if (fft_p->plan == NULL)
         return E_ADD_FFT_PLAN;
     return OK;
@@ -40,7 +41,7 @@ int destroy_fft( struct fft_params *fft_p, struct fft_data *fft_d ) {
 
 
 int run_fft( struct fft_params *fft_p, struct fft_data *fft_d ) {
-    fftw_complex *in;
+    double *in;
     fftw_plan plan;
     double x, val;
     float c;
@@ -59,9 +60,9 @@ int run_fft( struct fft_params *fft_p, struct fft_data *fft_d ) {
      * This is currently needed, as using the fft_d->fft_in array doesn't work
      * TODO: Fix error
      */
-    in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * fft_p->size);
+    in = (double*) fftw_malloc(sizeof(fftw_complex) * fft_p->size);
     //plan = fftw_plan_dft_1d(fft_p->size, fft_d->fft_in, fft_d->fft_out, FFTW_FORWARD, FFTW_ESTIMATE);
-    plan = fftw_plan_r2r_1d(fft_p->size, fft_d->fft_in, fft_d->fft_out, FFTW_DHT, FFTW_ESTIMATE);
+    fft_p->plan = fftw_plan_r2r_1d(fft_p->size, in, fft_d->fft_out, FFTW_DHT, FFTW_ESTIMATE);
 
     /*
      * this three for-loops generate a mixed cos function
@@ -70,9 +71,9 @@ int run_fft( struct fft_params *fft_p, struct fft_data *fft_d ) {
     for( int i = 0; i < fft_p->size; i++ ){
         x = 1.0 * i;
         c = cos(x*val);
-        fft_d->fft_in[i][0] = c;
-        in[i][0] = c;
-        if (c != fft_d->fft_in[i][0] )
+        fft_d->fft_in[i] = c;
+        in[i] = c;
+        if (c != fft_d->fft_in[i] )
             return E_W_COS;
         //fprintf(outfile, "%f\n", fft_d->fft_in[i][0]);
     }
@@ -84,14 +85,49 @@ int run_fft( struct fft_params *fft_p, struct fft_data *fft_d ) {
     */
     for( int i = 0; i < fft_p->size; i++ ){
         x = 10.0 * i;
-        fft_d->fft_in[i][0] = fft_d->fft_in[i][0] + cos(x*val);
-        in[i][0] = in[i][0] + cos(x*val);
+        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
+        in[i] = in[i] + cos(x*val);
+    }
+    for( int i = 0; i < fft_p->size; i++ ){
+        x = 50.0 * i;
+        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
+        in[i] = in[i] + cos(x*val);
+    }
+    for( int i = 0; i < fft_p->size; i++ ){
+        x = 49.0 * i;
+        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
+        in[i] = in[i] + cos(x*val);
+    }
+    for( int i = 0; i < fft_p->size; i++ ){
+        x = 48.0 * i;
+        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
+        in[i] = in[i] + cos(x*val);
+    }
+    for( int i = 0; i < fft_p->size; i++ ){
+        x = 10.0 * i;
+        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
+        in[i] = in[i] + cos(x*val);
+    }
+    for( int i = 0; i < fft_p->size; i++ ){
+        x = 47.0 * i;
+        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
+        in[i] = in[i] + cos(x*val);
+    }
+    for( int i = 0; i < fft_p->size; i++ ){
+        x = 46.0 * i;
+        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
+        in[i] = in[i] + cos(x*val);
+    }
+    for( int i = 0; i < fft_p->size; i++ ){
+        x = 45.0 * i;
+        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
+        in[i] = in[i] + cos(x*val);
     }
 
     for( int i = 0; i < fft_p->size; i++ ){
         x = 5.0 * i;
-        fft_d->fft_in[i][0] = fft_d->fft_in[i][0] + cos(x*val);
-        in[i][0] = in[i][0] + cos(x*val);
+        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
+        in[i] = in[i] + cos(x*val);
 //        printf("%f\n", in[i][0]);
 //        printf("%f\n", fft_d->fft_in[i][0]);
     }
@@ -101,7 +137,7 @@ int run_fft( struct fft_params *fft_p, struct fft_data *fft_d ) {
      */
 //    plan = fftw_plan_dft_1d(fft_p->size, fft_d->fft_in, fft_d->fft_out, FFTW_FORWARD, FFTW_ESTIMATE);
 //    fftw_print_plan(fft_p->plan);
-    fftw_execute(plan);
+    fftw_execute(fft_p->plan);
 
 /*
 //    fprintf(outfile, "Nach Plan\n");
@@ -116,20 +152,22 @@ int run_fft( struct fft_params *fft_p, struct fft_data *fft_d ) {
      * not needed in final code
      * TODO Remove gnuplot
      */
+/*
     fprintf(gnuplot, "plot '-'\n");
 
     for( int j = 0; j < fft_p->size; j++){
-//        fprintf(gnuplot, "%g %g\n", (double) j, *fft_d->fft_out[j]);
+        fprintf(gnuplot, "%g %g\n", (double) j, fft_d->fft_out[j]);
 //        fprintf(gnuplot, "%g %g\n", (double) j, *out[j]);
-        fprintf(gnuplot, "%g %g\n", (double) j, in[j]);
+//        fprintf(gnuplot, "%g %g\n", (double) j, in[j]);
 //        fprintf(gnuplot, "%g %g\n", (double) j, fft_d->fft_in[j]);
 //        fprintf(gnuplot, "%g %g\n", (double) j, *fft_out[j]);
     }
 
     fprintf(gnuplot, "e\n");
     fflush(gnuplot);
+*/
 
-    fftw_destroy_plan(plan);
+//    fftw_destroy_plan(fft_p->plan);
     fftw_free(in);
 
     return OK;

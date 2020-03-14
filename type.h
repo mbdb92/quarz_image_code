@@ -6,10 +6,13 @@
 #include <stdbool.h>
 
 #define OK 0
+#define ERR 7
 #define E_MAL_FFT_IN 1
 #define E_MAL_FFT_OUT 2
 #define E_ADD_FFT_PLAN 3
 #define E_W_COS 4
+#define E_SET_COLOR 5
+#define E_MAL_MAGICK_COLOR 6
 
 struct fft_params {
     fftw_plan plan;
@@ -32,8 +35,8 @@ struct quarz_params {
 };
 
 struct fft_data {
-    fftw_complex *fft_in;
-    fftw_complex *fft_out;
+    double *fft_in;
+    double *fft_out;
 };
 
 struct quarz_data {
