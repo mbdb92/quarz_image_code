@@ -11,24 +11,29 @@
 #include "type.h"
 #include "magick.h"
 
-#define X_CORD 1
+#define X_CORD 0
+#define X_SIZE 1
 #define BYTE_SIZE 255
 
 /*
  * This function should set up the needed Wands and stuff
  */
 int setup_drawing( struct magick_params *magick ) {
+
     MagickWandGenesis();
 
     magick->m_wand = NewMagickWand();
     magick->d_wand = NewDrawingWand();
     magick->c_wand = NewPixelWand();
 
+
+/*
     magick->color = malloc( 8 * sizeof(char) );
     if( magick->color == NULL )
         return E_MAL_MAGICK_COLOR;
 
     assert( magick->color != NULL );
+*/
     magick->max = 0;
     magick->min = 0;
 
@@ -44,7 +49,7 @@ int destroy_drawing( struct magick_params *magick ) {
     DestroyDrawingWand(magick->d_wand);
 
     MagickWandTerminus();
-    free( magick->color );
+//    free( magick->color );
     return 0;
 }
 
@@ -79,11 +84,12 @@ int run_magick_from_fft( struct magick_params *magick, struct fft_data *fft_d, u
 
     // Adds the backround, black so colors can be seen better
     PixelSetColor( magick->c_wand, "black" );
-    MagickNewImage( magick->m_wand, X_CORD, size, magick->c_wand );
+//    MagickNewImage( magick->m_wand, size, size, magick->c_wand );
+    MagickNewImage( magick->m_wand, X_SIZE, size, magick->c_wand );
 
     // Set ups some basic wand valus
     // TODO: Maybe move this to setup function
-    DrawSetStrokeOpacity( magick->d_wand, 1 );
+    DrawSetFillOpacity( magick->d_wand, 1 );
     DrawSetStrokeWidth( magick->d_wand, 1 );
 
     // This blocks prepares the factor, by which each value must be divided
@@ -105,7 +111,7 @@ int run_magick_from_fft( struct magick_params *magick, struct fft_data *fft_d, u
         // Converts the double value in fft_out into an usigned int
         // The shift by magick->min is needed to have no negative values
         // This is needed to get the hex value
-        color_green = (unsigned int)( (fft_d->fft_out[i] + fabs(magick->min)) / divider_green );
+        color_green = (int)( (fft_d->fft_out[i] + fabs(magick->min)) / divider_green );
 //        printf("%f\n", fft_d->fft_in[i]);
         // Sets the correct color string
         // Padding if the hex value would be single digit
@@ -124,7 +130,8 @@ int run_magick_from_fft( struct magick_params *magick, struct fft_data *fft_d, u
 //        printf("%d\n", retval);
         // This should draw the correct color
         DrawSetFillColor(magick->d_wand, magick->c_wand);
-        DrawPoint( magick->d_wand, X_CORD, (double) i );
+//        DrawPoint( magick->d_wand, (double) i, (double) i );
+        DrawPoint( magick->d_wand, (double) X_CORD, (double) i );
     }
 
     // Writes the file to disc

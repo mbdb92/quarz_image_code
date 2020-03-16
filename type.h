@@ -24,7 +24,7 @@ struct magick_params {
     MagickWand *m_wand;
     DrawingWand *d_wand;
     PixelWand *c_wand;
-    char *color;
+    char color[8];
     double max;
     double min;
 };
