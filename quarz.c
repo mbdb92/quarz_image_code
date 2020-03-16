@@ -1,3 +1,6 @@
+//For Debugging
+#include <assert.h>
+// For defined functions
 #include "type.h"
 #include "fft.h"
 #include "magick.h"

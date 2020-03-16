@@ -89,6 +89,11 @@ int run_fft( struct fft_params *fft_p, struct fft_data *fft_d ) {
         in[i] = in[i] + cos(x*val);
     }
     for( int i = 0; i < fft_p->size; i++ ){
+        x = 10.0 * i;
+        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
+        in[i] = in[i] + cos(x*val);
+    }
+    for( int i = 0; i < fft_p->size; i++ ){
         x = 50.0 * i;
         fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
         in[i] = in[i] + cos(x*val);

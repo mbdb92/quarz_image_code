@@ -5,6 +5,8 @@
 #include <stdbool.h>
 #include <string.h>
 #include <time.h>
+// For debugging
+#include <assert.h>
 // Local defined files
 #include "type.h"
 #include "magick.h"
@@ -26,6 +28,7 @@ int setup_drawing( struct magick_params *magick ) {
     if( magick->color == NULL )
         return E_MAL_MAGICK_COLOR;
 
+    assert( magick->color != NULL );
     magick->max = 0;
     magick->min = 0;
 
