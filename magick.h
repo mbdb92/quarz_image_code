@@ -1,6 +1,12 @@
 #ifndef DRAWING_H
 #define DRAWING_H
 
+#define X_CORD 0
+#define X_SIZE 1
+#define BYTE_SIZE 255
+#define HEX_MAX 16
+#define HEX_MIN 0
+
 int setup_drawing( struct magick_params *adr );
 
 int destroy_drawing( struct magick_params *adr );

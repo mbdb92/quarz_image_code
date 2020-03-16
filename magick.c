@@ -11,10 +11,6 @@
 #include "type.h"
 #include "magick.h"
 
-#define X_CORD 0
-#define X_SIZE 1
-#define BYTE_SIZE 255
-
 /*
  * This function should set up the needed Wands and stuff
  */
@@ -26,6 +22,10 @@ int setup_drawing( struct magick_params *magick ) {
     magick->d_wand = NewDrawingWand();
     magick->c_wand = NewPixelWand();
 
+/*
+ * This code block is legacy code. Needed, while color was holded,
+ * in a seperated allocated memory part
+ */
 
 /*
     magick->color = malloc( 8 * sizeof(char) );
@@ -36,6 +36,10 @@ int setup_drawing( struct magick_params *magick ) {
 */
     magick->max = 0;
     magick->min = 0;
+    
+    // Set ups some basic wand valus
+    DrawSetFillOpacity( magick->d_wand, 1 );
+    DrawSetStrokeWidth( magick->d_wand, 1 );
 
     return OK;
 }
@@ -49,7 +53,7 @@ int destroy_drawing( struct magick_params *magick ) {
     DestroyDrawingWand(magick->d_wand);
 
     MagickWandTerminus();
-//    free( magick->color );
+    //free( magick->color );
     return 0;
 }
 
@@ -80,64 +84,66 @@ int run_magick_from_fft( struct magick_params *magick, struct fft_data *fft_d, u
     bool retval;
     double divider_green;
     unsigned int color_green;
-//    *magick->color = "#FFFFFF";
 
     // Adds the backround, black so colors can be seen better
+    // This also sets the size of the image with the same size 
+    // as the fft_in struct should have
+    // X_SIZE is 1, as this is only one timeslot
     PixelSetColor( magick->c_wand, "black" );
-//    MagickNewImage( magick->m_wand, size, size, magick->c_wand );
     MagickNewImage( magick->m_wand, X_SIZE, size, magick->c_wand );
-
-    // Set ups some basic wand valus
-    // TODO: Maybe move this to setup function
-    DrawSetFillOpacity( magick->d_wand, 1 );
-    DrawSetStrokeWidth( magick->d_wand, 1 );
 
     // This blocks prepares the factor, by which each value must be divided
     // to fit into 256 bit hex code
     // Only green is currently used as a color value
+    // TODO: Check if this works by high dynamic input, or if this 
+    // has to be changed to have a longer stored maximun and minimum value
     find_min_max( fft_d->fft_out, &magick->max, &magick->min, size);
     if( magick->min < 0 )
         divider_green = (magick->max + fabs(magick->min)) / BYTE_SIZE;
     else
         divider_green = (magick->max - fabs(magick->min)) / BYTE_SIZE;
-
+#ifdef PRINT_DEBUG
     printf("Going color\n");
     printf( "%f\n", divider_green);
     printf( "%f, %f\n", magick->max, magick->min);
+#endif
 
-
-    // Iteartion over the output value
+    // Iteartion over the output value struct fft_out
+    // TODO: remove hardcoded fft_out
     for( int i = 0; i < size; i++ ) {
         // Converts the double value in fft_out into an usigned int
         // The shift by magick->min is needed to have no negative values
         // This is needed to get the hex value
         color_green = (int)( (fft_d->fft_out[i] + fabs(magick->min)) / divider_green );
-//        printf("%f\n", fft_d->fft_in[i]);
+
+#ifdef PRINT_DEBUG
+        printf("%f\n", fft_d->fft_in[i]);
+#endif  
+
         // Sets the correct color string
         // Padding if the hex value would be single digit
-//        printf( "%i\n", color_green);
-        if( color_green < 16 && color_green >= 0 ) {
+        if( color_green < HEX_MAX && color_green >= HEX_MIN ) {
             sprintf( magick->color, "#000%x%s", color_green, "00" );
         } else {
             sprintf( magick->color, "#00%x%s", color_green, "00" );
         }
-//        printf( "%s\n", magick->color );
         // This realy sets the color!
         retval = PixelSetColor(magick->c_wand, magick->color);
         if( retval != true ){
             return E_SET_COLOR;
         }
-//        printf("%d\n", retval);
         // This should draw the correct color
+        // Both function have a void type,
+        // therefor no return value is checked
         DrawSetFillColor(magick->d_wand, magick->c_wand);
-//        DrawPoint( magick->d_wand, (double) i, (double) i );
         DrawPoint( magick->d_wand, (double) X_CORD, (double) i );
     }
 
     // Writes the file to disc
+    // TODO: Change Output filename to a given parameter to function
     MagickDrawImage(magick->m_wand, magick->d_wand);
     MagickWriteImage(magick->m_wand, "test.jpg");
 
-    return 0;
+    return OK;
 }
 
