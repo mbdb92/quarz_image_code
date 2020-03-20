@@ -9,6 +9,8 @@ int create_fft( struct fft_params *fft_p, struct fft_data *fft_d );
 
 int destroy_fft( struct fft_params *fft_p, struct fft_data *fft_d );
 
-int run_fft( struct fft_params *fft_p, struct fft_data *fft_d );
+int fill_input_struct( struct fft_params *fft_p, struct fft_data *fft_d, double *in );
+
+int run_fft( struct fft_params *fft_p, struct fft_data *fft_d, double *buffer );
 
 #endif //FFT_H

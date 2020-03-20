@@ -7,6 +7,8 @@
 #include <time.h>
 // For debugging
 #include <assert.h>
+// for fabs()
+#include <math.h>
 // Local defined files
 #include "type.h"
 #include "magick.h"
@@ -64,15 +66,20 @@ int destroy_drawing( struct magick_params *magick ) {
  * more readable, it's moved here
  */
 int find_min_max( double *data, double *max, double *min, unsigned long size ) {
-    *max = 0;
-    *min = 0;
+    *max = 0.0;
+    *min = 0.0;
 
     for( int i = 0; i < size; i++ ){
-        if( data[i] > *max )
+        if( data[i] > fabs(*max) ){
+            printf("Max\n");
             *max = data[i];
+        }
 
-        if( data[i] < *min )
+        if( data[i] < fabs(*min) ) {
+            printf("Max\n");
             *min = data[i];
+        }
+        printf( "%f, %f\n", *max, *min);
     }
     return OK;
 }
