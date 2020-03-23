@@ -116,11 +116,11 @@ int fill_input_struct( struct fft_params *fft_p, struct fft_data *fft_d, double 
     return OK;
 }
 
-int run_fft( struct fft_params *fft_p, struct fft_data *fft_d, double *buffer ) {
+int run_fft( struct fft_params *fft_p, struct fft_data *fft_d, long *buffer ) {
     double *in;
     fftw_plan plan;
     int retval;
-#ifdef PRINT_DEBUG
+#ifdef PRINT_PLOT
     FILE *gnuplot = popen("gnuplot -persistent", "w");
     FILE *outfile = fopen("values.raw", "w+");
 #endif
@@ -134,7 +134,7 @@ int run_fft( struct fft_params *fft_p, struct fft_data *fft_d, double *buffer ) 
     fft_p->plan = fftw_plan_r2r_1d(fft_p->size, in, fft_d->fft_out, FFTW_DHT, FFTW_ESTIMATE);
 
     for( int i = 0; i < fft_p->size; i++ ) {
-        in[i] = buffer[i];
+        in[i] = (double) buffer[i];
     }
 //    retval = fill_input_struct( fft_p, fft_d, in );
     
@@ -143,11 +143,10 @@ int run_fft( struct fft_params *fft_p, struct fft_data *fft_d, double *buffer ) 
      */
     fftw_execute(fft_p->plan);
 
-#ifdef PRINT_DEBUG
+#ifdef PRINT_PLOT
     /*
      * the gnu-plot code is for debugging,
      * not needed in final code
-     * TODO Remove gnuplot
      */
     fprintf(gnuplot, "plot '-'\n");
 
@@ -159,6 +158,9 @@ int run_fft( struct fft_params *fft_p, struct fft_data *fft_d, double *buffer ) 
     fflush(gnuplot);
 #endif
 
+    for( int i = 0; i < fft_p->size; i++ ) {
+        printf("%f\n", fft_d->fft_out[i]);
+    }
     fftw_free(in);
 
     return OK;

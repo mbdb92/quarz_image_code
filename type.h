@@ -25,8 +25,8 @@ struct magick_params {
     DrawingWand *d_wand;
     PixelWand *c_wand;
     char color[8];
-    double max;
-    double min;
+    long max;
+    long min;
 };
 
 struct quarz_params {

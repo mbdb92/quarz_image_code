@@ -15,7 +15,7 @@ int main() {
     struct quarz_params *params;
     struct quarz_data *data;
     int return_value;
-    double *audio_buffer;
+    long *audio_buffer;
 
     params = malloc( sizeof(struct quarz_params) );
     data = malloc( sizeof(struct quarz_data) );

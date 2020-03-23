@@ -65,21 +65,16 @@ int destroy_drawing( struct magick_params *magick ) {
  * This is needed, to calculate the correct value for the color. To make the rest of the code
  * more readable, it's moved here
  */
-int find_min_max( double *data, double *max, double *min, unsigned long size ) {
-    *max = 0.0;
-    *min = 0.0;
+int find_min_max( double *data, long *max, long *min, unsigned long size ) {
+    *max = 0;
+    *min = 0;
 
     for( int i = 0; i < size; i++ ){
-        if( data[i] > fabs(*max) ){
-            printf("Max\n");
-            *max = data[i];
-        }
+        if( (long) fabs(data[i]) > *max )
+            *max = (long) fabs(data[i]);
 
-        if( data[i] < fabs(*min) ) {
-            printf("Max\n");
-            *min = data[i];
-        }
-        printf( "%f, %f\n", *max, *min);
+        if( (long) fabs(data[i]) < *min ) 
+            *min = (long) fabs(data[i]);
     }
     return OK;
 }
@@ -89,8 +84,9 @@ int find_min_max( double *data, double *max, double *min, unsigned long size ) {
  */
 int run_magick_from_fft( struct magick_params *magick, struct fft_data *fft_d, unsigned long size ) {
     bool retval;
-    double divider_green;
+    long divider_green;
     unsigned int color_green;
+    int len;
 
     // Adds the backround, black so colors can be seen better
     // This also sets the size of the image with the same size 
@@ -106,13 +102,11 @@ int run_magick_from_fft( struct magick_params *magick, struct fft_data *fft_d, u
     // has to be changed to have a longer stored maximun and minimum value
     find_min_max( fft_d->fft_out, &magick->max, &magick->min, size);
     if( magick->min < 0 )
-        divider_green = (magick->max + fabs(magick->min)) / BYTE_SIZE;
-    else
-        divider_green = (magick->max - fabs(magick->min)) / BYTE_SIZE;
+        divider_green = (magick->max - magick->min) / BYTE_SIZE;
 #ifdef PRINT_DEBUG
     printf("Going color\n");
-    printf( "%f\n", divider_green);
-    printf( "%f, %f\n", magick->max, magick->min);
+    printf( "%li\n", divider_green);
+    printf( "%li, %li\n", magick->max, magick->min);
 #endif
 
     // Iteartion over the output value struct fft_out
@@ -121,30 +115,67 @@ int run_magick_from_fft( struct magick_params *magick, struct fft_data *fft_d, u
         // Converts the double value in fft_out into an usigned int
         // The shift by magick->min is needed to have no negative values
         // This is needed to get the hex value
-        color_green = (int)( (fft_d->fft_out[i] + fabs(magick->min)) / divider_green );
+        color_green = (int)( ((long) fabs(fft_d->fft_out[i]) + magick->min) / divider_green );
 
 #ifdef PRINT_DEBUG
-        printf("%f\n", fft_d->fft_in[i]);
+        printf("%f\n", fft_d->fft_out[i]);
+        printf("%i\n", color_green);
 #endif  
 
         // Sets the correct color string
         // Padding if the hex value would be single digit
+/*
         if( color_green < HEX_MAX && color_green >= HEX_MIN ) {
             sprintf( magick->color, "#000%x%s", color_green, "00" );
         } else {
             sprintf( magick->color, "#00%x%s", color_green, "00" );
         }
+*/
+        sprintf( magick->color, "%x", color_green );
+        len = strlen( magick->color );
+#ifdef PRINT_DEBUG
+        printf("%i\n", len);
+#endif  
+        switch( len ) {
+            case 4:     
+                sprintf( magick->color, "#00%x", color_green );
+                break;
+            case 3:     
+                sprintf( magick->color, "#000%x", color_green );
+                break;
+            case 2:     
+                sprintf( magick->color, "#0000%x", color_green );
+                break;
+            case 1:     
+                sprintf( magick->color, "#00000%x", color_green );
+                break;
+            default:     
+                sprintf( magick->color, "#000000" );
+                break;
+        }
+#ifdef PRINT_DEBUG
+        printf("%s\n", magick->color);
+#endif  
         // This realy sets the color!
         retval = PixelSetColor(magick->c_wand, magick->color);
         if( retval != true ){
             return E_SET_COLOR;
         }
+#ifdef PRINT_DEBUG
+        printf("Set color done\n");
+#endif
         // This should draw the correct color
         // Both function have a void type,
         // therefor no return value is checked
         DrawSetFillColor(magick->d_wand, magick->c_wand);
         DrawPoint( magick->d_wand, (double) X_CORD, (double) i );
+#ifdef PRINT_DEBUG
+        printf("Point drawn\n");
+#endif
     }
+#ifdef PRINT_DEBUG
+        printf("Points drawn!\n");
+#endif
 
     // Writes the file to disc
     // TODO: Change Output filename to a given parameter to function

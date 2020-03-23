@@ -50,14 +50,14 @@ int setup_pcm_struct( snd_pcm_t *handle, snd_pcm_hw_params_t *params ) {
     rc = snd_pcm_hw_params_set_period_size_near(handle, params, &frames, &dir);
     if (rc < 0)
         return HW_SET_PERIOD_FAIL;
-#ifdef DEBUG
+#ifdef PRINT_DEBUG
     printf("Setting Params\n");
 #endif
     // Once the struct is filled, the settings get applied to the device
     rc = snd_pcm_hw_params(handle, params);
     if (rc < 0)
         return HW_PARAMS_ERROR;
-#ifdef DEBUG
+#ifdef PRINT_DEBUG
     printf("Prepare Device\n");
 #endif
     // This shouldn't be needed, as the device should be prepared after the previous step
@@ -76,7 +76,7 @@ int setup_pcm_struct( snd_pcm_t *handle, snd_pcm_hw_params_t *params ) {
 snd_pcm_t * open_device( const char *name, snd_pcm_stream_t stream, int mode ) {
     int rc;
     static snd_pcm_t *handle;
-#ifdef DEBUG
+#ifdef PRINT_DEBUG
     printf("Open Device\n");
 #endif
     rc = snd_pcm_open( &handle, DEVICE, SND_PCM_STREAM_CAPTURE, mode );
@@ -92,7 +92,7 @@ snd_pcm_t * open_device( const char *name, snd_pcm_stream_t stream, int mode ) {
 
 
 
-int record_to_file( double *buffer ) {
+int record_to_file( long *buffer ) {
     static long loops;
     static int rc, dir, size;
     static snd_pcm_t *handle;
@@ -131,7 +131,7 @@ int record_to_file( double *buffer ) {
     /*
      * This Block prepares the device for usage
      */
-#ifdef DEBUG
+#ifdef PRINT_DEBUG
     printf("Preparing Device\n");
 #endif
     rc = setup_pcm_struct( handle, params );
@@ -145,7 +145,7 @@ int record_to_file( double *buffer ) {
     /*
      * This Block takes care of the buffer, the sound is read to, before used further
      */
-#ifdef DEBUG
+#ifdef PRINT_DEBUG
     printf("Allocating Buffer\n");
 #endif
     rc = snd_pcm_hw_params_get_period_size(params, &frames, &dir);
@@ -154,15 +154,15 @@ int record_to_file( double *buffer ) {
         exit(1);
     }
     size = frames * 4;
-#ifdef VERBOSE
+#ifdef PRINT_DEBUG
     printf("Size of Buffer is %i", size);
 #endif /*VERBOSE*/
-    buffer = (double *) malloc(size);
+    buffer = (long *) malloc(size);
     if (buffer == NULL){
 //        print_error_code( MALLOC_ERROR );
         return MALLOC_ERROR;
     }
-#ifdef DEBUG
+#ifdef PRINT_DEBUG
     printf("Entering Loop\n");
 #endif
 
@@ -185,7 +185,7 @@ int record_to_file( double *buffer ) {
         }else if (rc != (int)frames) {
             fprintf(stderr, "short read, read %d frames\n", rc);
         } else {
-#ifdef DEBUG
+#ifdef PRINT_DEBUG
             printf("Frames read: %i\n", rc);
 #endif
         }

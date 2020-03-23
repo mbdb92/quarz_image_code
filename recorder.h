@@ -23,6 +23,6 @@ int setup_pcm_struct( snd_pcm_t *handle, snd_pcm_hw_params_t *params );
 
 snd_pcm_t * open_device( const char *name, snd_pcm_stream_t stream, int mode );
 
-int record_to_file( double *buffer );
+int record_to_file( long *buffer );
 
 #endif /*RECORDER_H*/
