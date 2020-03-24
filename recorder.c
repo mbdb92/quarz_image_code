@@ -4,8 +4,7 @@
 #include <stdio.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-
-static snd_pcm_t * Handle;
+#include "type.h"
 
 #ifndef NOSUB
 /*
@@ -92,39 +91,30 @@ snd_pcm_t * open_device( const char *name, snd_pcm_stream_t stream, int mode ) {
 
 
 
-int record_to_file( long *buffer ) {
-    static long loops;
-    static int rc, dir, size;
-    static snd_pcm_t *handle;
-    static snd_pcm_hw_params_t *params;
-    static snd_pcm_uframes_t frames;
+int record_to_buffer( long *buffer, struct alsa_params alsa ) {
+    long loops;
+    int rc, dir, size;
+    snd_pcm_t *handle;
+    snd_pcm_hw_params_t *params;
+    snd_pcm_uframes_t frames;
+    handle = alsa.handle;
+    params = alsa.params;
+    frames = alsa.frames;
 //    static double *buffer;
-#ifdef FILE
-    static int fd;
-
-    /*
-     * This Block takes care of the filehandling
-     */
-    fd = open("output.raw", O_RDWR | O_CREAT);
-    if (fd == -1) {
-        fprintf(stderr, "unable to open file: %s\n", strerror(errno));
-        exit(4);
-    }
-#endif
 
 
     /*
      * This block takes care of the device initialisation
      */
-    handle = open_device( DEVICE, SND_PCM_STREAM_CAPTURE, 0 );
-    if (rc < 0) {
+//    handle = open_device( DEVICE, SND_PCM_STREAM_CAPTURE, 0 );
+//    if (rc < 0) {
 //        print_error_code( PCM_OPEN_FAIL );
-    }
+//    }
 #ifdef VERBOSE
     check_state( handle );
 #endif
     // alloca hat keinen returnvalue da es ein Macro ist
-    snd_pcm_hw_params_malloc(&params);
+//    snd_pcm_hw_params_malloc(&params);
 
 
 
@@ -134,11 +124,11 @@ int record_to_file( long *buffer ) {
 #ifdef PRINT_DEBUG
     printf("Preparing Device\n");
 #endif
-    rc = setup_pcm_struct( handle, params );
-    if (rc != OK) {
- //       print_error_code( rc );
-        exit(1);
-    }
+//    rc = setup_pcm_struct( handle, params );
+//    if (rc != OK) {
+//        print_error_code( rc );
+//        exit(1);
+//    }
 
 
 
@@ -148,20 +138,21 @@ int record_to_file( long *buffer ) {
 #ifdef PRINT_DEBUG
     printf("Allocating Buffer\n");
 #endif
-    rc = snd_pcm_hw_params_get_period_size(params, &frames, &dir);
-    if (rc < 0) {
+//    rc = snd_pcm_hw_params_get_period_size(params, &frames, &dir);
+//    if (rc < 0) {
 //        print_error_code( rc );
-        exit(1);
-    }
-    size = frames * 4;
+//        exit(1);
+//    }
+//    size = frames * 4;
+
 #ifdef PRINT_DEBUG
     printf("Size of Buffer is %i", size);
 #endif /*VERBOSE*/
-    buffer = (long *) malloc(size);
-    if (buffer == NULL){
+//    buffer = (long *) malloc(size);
+//    if (buffer == NULL){
 //        print_error_code( MALLOC_ERROR );
-        return MALLOC_ERROR;
-    }
+//        return MALLOC_ERROR;
+//    }
 #ifdef PRINT_DEBUG
     printf("Entering Loop\n");
 #endif
@@ -189,21 +180,12 @@ int record_to_file( long *buffer ) {
             printf("Frames read: %i\n", rc);
 #endif
         }
-#ifdef FILE
-        rc = write(fd, buffer, size);
-        if (rc != size) {
-            fprintf(stderr, "short write: wrote %d bytes\n", rc);
-        }
-#endif
     }
 
     snd_pcm_drain(handle);
     snd_pcm_close(handle);
-#ifdef FILE
-    close(fd);
-#endif
 //:    free(buffer);
-    printf("%i\n", size);
+//    printf("%i\n", size);
     return size;
 }
 

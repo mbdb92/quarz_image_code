@@ -2,12 +2,8 @@
 #define RECORDER_H
 
 #include <alsa/asoundlib.h>
+#include "type.h"
 
-#define ALSA_PCM_NEW_HW_PARAMS_API
-#define DEVICE "default"
-#define CHANNEL_NUMBER 1
-#define RATE 44100u
-#define FRAMES 32
 #define OK 0
 #define PCM_OPEN_FAIL 1
 #define HW_ANY_PARAMS_FAIL 2
@@ -23,6 +19,6 @@ int setup_pcm_struct( snd_pcm_t *handle, snd_pcm_hw_params_t *params );
 
 snd_pcm_t * open_device( const char *name, snd_pcm_stream_t stream, int mode );
 
-int record_to_file( long *buffer );
+int record_to_buffer( long *buffer, struct alsa_params alsa );
 
 #endif /*RECORDER_H*/
