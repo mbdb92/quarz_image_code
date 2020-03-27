@@ -3,7 +3,7 @@
 
 #define X_CORD 0
 #define X_SIZE 1
-#define BYTE_SIZE 255
+#define BYTE_SIZE 1023
 #define HEX_MAX 16
 #define HEX_MIN 0
 

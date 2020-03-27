@@ -11,6 +11,7 @@
 #define CHANNEL_NUMBER 1
 #define RATE 44100u
 #define FRAMES 32
+#define CHILD 0
 #define OK 0
 #define ERR 7
 #define E_MAL_FFT_IN 1
@@ -20,6 +21,7 @@
 #define E_SET_COLOR 5
 #define E_MAL_MAGICK_COLOR 6
 #define E_MAL_BUF 8
+#define E_PIPE 9
 
 struct alsa_params {
     snd_pcm_t *handle;
@@ -43,7 +45,13 @@ struct magick_params {
 };
 
 struct quarz_params {
+    int pipedf[2];
     struct alsa_params alsa;
+    struct fft_params fft;
+    struct magick_params magick;
+};
+
+struct fork_params {
     struct fft_params fft;
     struct magick_params magick;
 };

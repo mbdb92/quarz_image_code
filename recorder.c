@@ -100,64 +100,8 @@ int record_to_buffer( long *buffer, struct alsa_params alsa ) {
     handle = alsa.handle;
     params = alsa.params;
     frames = alsa.frames;
-//    static double *buffer;
-
-
-    /*
-     * This block takes care of the device initialisation
-     */
-//    handle = open_device( DEVICE, SND_PCM_STREAM_CAPTURE, 0 );
-//    if (rc < 0) {
-//        print_error_code( PCM_OPEN_FAIL );
-//    }
-#ifdef VERBOSE
-    check_state( handle );
-#endif
-    // alloca hat keinen returnvalue da es ein Macro ist
-//    snd_pcm_hw_params_malloc(&params);
-
-
-
-    /*
-     * This Block prepares the device for usage
-     */
-#ifdef PRINT_DEBUG
-    printf("Preparing Device\n");
-#endif
-//    rc = setup_pcm_struct( handle, params );
-//    if (rc != OK) {
-//        print_error_code( rc );
-//        exit(1);
-//    }
-
-
-
-    /*
-     * This Block takes care of the buffer, the sound is read to, before used further
-     */
-#ifdef PRINT_DEBUG
-    printf("Allocating Buffer\n");
-#endif
-//    rc = snd_pcm_hw_params_get_period_size(params, &frames, &dir);
-//    if (rc < 0) {
-//        print_error_code( rc );
-//        exit(1);
-//    }
-//    size = frames * 4;
-
-#ifdef PRINT_DEBUG
-    printf("Size of Buffer is %i", size);
-#endif /*VERBOSE*/
-//    buffer = (long *) malloc(size);
-//    if (buffer == NULL){
-//        print_error_code( MALLOC_ERROR );
-//        return MALLOC_ERROR;
-//    }
-#ifdef PRINT_DEBUG
-    printf("Entering Loop\n");
-#endif
-
     unsigned int val = 0;
+
     snd_pcm_hw_params_get_period_time(params, &val, &dir);
     snd_pcm_hw_params_get_rate(params, &val, &dir);
 
@@ -182,10 +126,10 @@ int record_to_buffer( long *buffer, struct alsa_params alsa ) {
         }
     }
 
-    snd_pcm_drain(handle);
-    snd_pcm_close(handle);
+//    snd_pcm_drain(handle);
+//    snd_pcm_close(handle);
 //:    free(buffer);
 //    printf("%i\n", size);
-    return size;
+    return OK;
 }
 

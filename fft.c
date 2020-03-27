@@ -83,9 +83,12 @@ int run_fft( struct fft_params *fft_p, struct fft_data *fft_d, long *buffer ) {
     fflush(gnuplot);
 #endif
 
+#ifdef PRINT_DEBUG
     for( int i = 0; i < fft_p->size; i++ ) {
         printf("%f\n", fft_d->fft_out[i]);
     }
+#endif
+
     fftw_free(in);
 
     return OK;
