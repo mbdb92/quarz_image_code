@@ -1,18 +1,17 @@
 CC=clang
 CFLAGS=
 OBJ = quarz.out
-FILE = recorder.c
+FILE = quarz.c magick.c fft.c recorder.c
 
-LIBS=-lasound -lfftw3 -lm
-
-verbose: $(FILE)
-	$(CC) $(FILE) -o $(OBJ) $(CFLAGS) -DVERBOSE $(LIBS)
-
-debug: $(FILE)
-	$(CC) $(FILE) -o $(OBJ) $(CFLAGS) -DDEBUG $(LIBS)
+LIBS_ALSA = -lasound
+LIBS_FFT = -lm -lfftw3
+LIBS_MAGICK = `pkg-config --cflags --libs MagickWand`
 
 all: $(FILE)
-	$(CC) $(FILE) -o $(OBJ) $(CFLAGS) $(LIBS)
+	$(CC) $(FILE) -o $(OBJ) $(CFLAGS) $(LIBS_ALSA) $(LIBS_FFT) $(LIBS_MAGICK)
+
+verbose: $(FILE)
+	$(CC) $(FILE) -o $(OBJ) $(CFLAGS) $(LIBS_ALSA) $(LIBS_FFT) $(LIBS_MAGICK) -v -DPRINT_DEBUG
 
 clean:
-	rm -f *.out
+	rm -f *.out *.jpg

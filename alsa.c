@@ -1,12 +1,17 @@
-#include "recorder.h"
+#include "alsa.h"
 #include <alsa/asoundlib.h>
 // for file access
+#include <signal.h>
 #include <stdio.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <fcntl.h>
 #include "type.h"
+#include "codes.h"
+#include "error_n_info.h"
 
-#ifndef NOSUB
+int alsa_state;
+
 /*
  * This takes the pointer to the array of params and sets the needed parameters
  * Once this is done, the settings will be applied
@@ -87,8 +92,6 @@ snd_pcm_t * open_device( const char *name, snd_pcm_stream_t stream, int mode ) {
 #endif
     return handle;
 }
-#endif /*N-NOSUB*/
-
 
 
 int record_to_buffer( long *buffer, struct alsa_params alsa ) {
@@ -103,59 +106,7 @@ int record_to_buffer( long *buffer, struct alsa_params alsa ) {
 //    static double *buffer;
 
 
-    /*
-     * This block takes care of the device initialisation
-     */
-//    handle = open_device( DEVICE, SND_PCM_STREAM_CAPTURE, 0 );
-//    if (rc < 0) {
-//        print_error_code( PCM_OPEN_FAIL );
-//    }
-#ifdef VERBOSE
-    check_state( handle );
-#endif
-    // alloca hat keinen returnvalue da es ein Macro ist
-//    snd_pcm_hw_params_malloc(&params);
 
-
-
-    /*
-     * This Block prepares the device for usage
-     */
-#ifdef PRINT_DEBUG
-    printf("Preparing Device\n");
-#endif
-//    rc = setup_pcm_struct( handle, params );
-//    if (rc != OK) {
-//        print_error_code( rc );
-//        exit(1);
-//    }
-
-
-
-    /*
-     * This Block takes care of the buffer, the sound is read to, before used further
-     */
-#ifdef PRINT_DEBUG
-    printf("Allocating Buffer\n");
-#endif
-//    rc = snd_pcm_hw_params_get_period_size(params, &frames, &dir);
-//    if (rc < 0) {
-//        print_error_code( rc );
-//        exit(1);
-//    }
-//    size = frames * 4;
-
-#ifdef PRINT_DEBUG
-    printf("Size of Buffer is %i", size);
-#endif /*VERBOSE*/
-//    buffer = (long *) malloc(size);
-//    if (buffer == NULL){
-//        print_error_code( MALLOC_ERROR );
-//        return MALLOC_ERROR;
-//    }
-#ifdef PRINT_DEBUG
-    printf("Entering Loop\n");
-#endif
 
     unsigned int val = 0;
     snd_pcm_hw_params_get_period_time(params, &val, &dir);
@@ -182,10 +133,95 @@ int record_to_buffer( long *buffer, struct alsa_params alsa ) {
         }
     }
 
-    snd_pcm_drain(handle);
-    snd_pcm_close(handle);
-//:    free(buffer);
+//    free(buffer);
 //    printf("%i\n", size);
     return size;
 }
 
+
+
+
+int alsa_handler( int pipefd[2] ) {
+    struct pid_collection *pids;
+    struct alsa_params *alsa;
+    int rc, dir;
+    void (*sigHandlerReturn)(int);
+
+    // For Signal Handler status
+    alsa_state = ZERO;
+    pids = malloc( sizeof(struct pid_collection) );
+    alsa = malloc( sizeof(struct alsa_params) );
+
+    sigHandlerReturn = signal( SIGPIPE, handler_get_pid );
+    if ( sigHandlerReturn == SIG_ERR ) {
+        return 1;
+    }
+
+    // Wait to get pids
+    pause();
+
+    read( pipefd[0], pids, sizeof(pids) );
+
+    return 0;
+    /*
+     * This block takes care of the device initialisation
+     */
+    alsa->handle = open_device( DEVICE, SND_PCM_STREAM_CAPTURE, 0 );
+    if (rc < 0) {
+        print_error_code( PCM_OPEN_FAIL );
+    }
+    // alloca hat keinen returnvalue da es ein Macro ist
+    snd_pcm_hw_params_malloc(&alsa->params);
+
+    /*
+     * This Block prepares the device for usage
+     */
+#ifdef PRINT_DEBUG
+    printf("Preparing Device\n");
+#endif
+    rc = setup_pcm_struct( alsa->handle, alsa->params );
+    if (rc != OK) {
+        print_error_code( rc );
+        exit(1);
+    }
+
+    /*
+     * This Block takes care of the buffer, the sound is read to, before used further
+     */
+#ifdef PRINT_DEBUG
+    printf("Allocating Buffer\n");
+#endif
+    rc = snd_pcm_hw_params_get_period_size(alsa->params, &alsa->frames, &dir);
+    if (rc < 0) {
+        print_error_code( rc );
+        exit(1);
+    }
+    alsa->size = alsa->frames * 4;
+
+#ifdef PRINT_DEBUG
+    printf("Size of Buffer is %i", alsa->size);
+#endif /*VERBOSE*/
+    alsa->buffer = (long *) malloc(alsa->size);
+    if (alsa->buffer == NULL){
+        print_error_code( MALLOC_ERROR );
+        return MALLOC_ERROR;
+    }
+#ifdef PRINT_DEBUG
+    printf("Entering Loop\n");
+#endif
+
+
+    snd_pcm_drain(alsa->handle);
+    snd_pcm_close(alsa->handle);
+    free(alsa->buffer);
+    free(alsa);
+    return 0;
+}
+
+
+void handler_get_pid( int signum ) {
+    if( signum == SIGPIPE ) {
+        alsa_state = READ_PIPE;
+    }
+    return;
+}

@@ -15,10 +15,10 @@
 #define HW_PARAMS_ERROR 8
 #define MALLOC_ERROR 9
 
+void handler_get_pid( int signum );
 int setup_pcm_struct( snd_pcm_t *handle, snd_pcm_hw_params_t *params );
-
 snd_pcm_t * open_device( const char *name, snd_pcm_stream_t stream, int mode );
-
 int record_to_buffer( long *buffer, struct alsa_params alsa );
+int alsa_handler( int pipefd[2] );
 
 #endif /*RECORDER_H*/

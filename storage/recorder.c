@@ -1,88 +1,10 @@
 #include "recorder.h"
 #include <alsa/asoundlib.h>
-// for time function
-#ifdef VERBOSE
-#include <time.h>
-#endif /*VERBOSE*/
 // for file access
 #include <stdio.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-// For fftw
-#include <complex.h>
-#include <fftw3.h>
-
-
-static snd_pcm_t * Handle;
-
-// Helper function for debugging errors. If the device has a state error,
-// this function can check for the state
-void check_state( snd_pcm_t *handle ) {
-    switch( (unsigned int) snd_pcm_state(handle) ) {
-            case SND_PCM_STATE_OPEN:
-                printf("State is OPEN\n");
-                break;
-            case SND_PCM_STATE_SETUP:
-                printf("State is SETUP\n");
-                break;
-            case SND_PCM_STATE_PREPARED:
-                printf("State is PREPARED\n");
-                break;
-            case SND_PCM_STATE_RUNNING:
-                printf("State is RUNNING\n");
-                break;
-            case SND_PCM_STATE_XRUN:
-                printf("State is XRUN\n");
-                break;
-            case SND_PCM_STATE_DRAINING:
-                printf("State is DRAINING\n");
-                break;
-            case SND_PCM_STATE_PAUSED:
-                printf("State is PAUSED\n");
-                break;
-            case SND_PCM_STATE_SUSPENDED:
-                printf("State is SUSPENDED\n");
-                break;
-            case SND_PCM_STATE_DISCONNECTED:
-                printf("State is DISCONNECTED\n");
-                break;
-            default: 
-                break;
-    }
-}
-
-// Central error code resolver, so I can change and edit them at one point
-void print_error_code( int errnr ) {
-    switch( errnr ) {
-            case PCM_OPEN_FAIL:
-                fprintf(stderr, "snd_pcm_open() failed: %s\n", snd_strerror(errnr));
-                break;
-            case HW_ANY_PARAMS_FAIL:
-                fprintf(stderr, "snd_pcm_hw_params_any() failed: %s\n", snd_strerror(errnr));
-                break;
-            case HW_SET_ACCESS_FAIL:
-                fprintf(stderr, "snd_pcm_hw_params_set_access() failed: %s\n", snd_strerror(errnr));
-                break;
-            case HW_SET_FORMAT_FAIL:
-                fprintf(stderr, "snd_pcm_hw_params_set_format() failed: %s\n", snd_strerror(errnr));
-                break;
-            case HW_SET_CHANNELS_FAIL:
-                fprintf(stderr, "snd_pcm_hw_params_set_channels() failed: %s\n", snd_strerror(errnr));
-                break;
-            case HW_SET_RATE_FAIL:
-                fprintf(stderr, "snd_pcm_hw_params_set_rate_near() failed: %s\n", snd_strerror(errnr));
-                break;
-            case HW_SET_PERIOD_FAIL:
-                fprintf(stderr, "snd_pcm_hw_params_set_period_size_near() failed: %s\n", snd_strerror(errnr));
-                break;
-            case HW_PARAMS_ERROR:
-                fprintf(stderr, "Setting struct failed\n");
-                fprintf(stderr, "snd_pcm_hw_params() failed: %s\n", snd_strerror(errnr));
-                break;
-            default: 
-                break;
-    }
-}
+#include "type.h"
 
 #ifndef NOSUB
 /*
@@ -127,14 +49,14 @@ int setup_pcm_struct( snd_pcm_t *handle, snd_pcm_hw_params_t *params ) {
     rc = snd_pcm_hw_params_set_period_size_near(handle, params, &frames, &dir);
     if (rc < 0)
         return HW_SET_PERIOD_FAIL;
-#ifdef DEBUG
+#ifdef PRINT_DEBUG
     printf("Setting Params\n");
 #endif
     // Once the struct is filled, the settings get applied to the device
     rc = snd_pcm_hw_params(handle, params);
     if (rc < 0)
         return HW_PARAMS_ERROR;
-#ifdef DEBUG
+#ifdef PRINT_DEBUG
     printf("Prepare Device\n");
 #endif
     // This shouldn't be needed, as the device should be prepared after the previous step
@@ -153,12 +75,12 @@ int setup_pcm_struct( snd_pcm_t *handle, snd_pcm_hw_params_t *params ) {
 snd_pcm_t * open_device( const char *name, snd_pcm_stream_t stream, int mode ) {
     int rc;
     static snd_pcm_t *handle;
-#ifdef DEBUG
+#ifdef PRINT_DEBUG
     printf("Open Device\n");
 #endif
     rc = snd_pcm_open( &handle, DEVICE, SND_PCM_STREAM_CAPTURE, mode );
     if (rc < 0) {
-        print_error_code( PCM_OPEN_FAIL );
+//        print_error_code( PCM_OPEN_FAIL );
     }
 #ifdef DEBUG
     Handle = handle;
@@ -169,84 +91,69 @@ snd_pcm_t * open_device( const char *name, snd_pcm_stream_t stream, int mode ) {
 
 
 
-int record_to_file () {
-    static long loops;
-    static int rc, dir, size;
-    static snd_pcm_t *handle;
-    static snd_pcm_hw_params_t *params;
-    static snd_pcm_uframes_t frames;
-    static char *buffer;
-    static int fd;
-#ifdef VERBOSE
-    clock_t t, dt, cycle;
-    double time_taken;
-#endif
-    fftw_complex *in, *out;
-    fftw_plan p;
-
-
-
-    /*
-     * This Block takes care of the filehandling
-     */
-    fd = open("output.raw", O_RDWR | O_CREAT);
-    if (fd == -1) {
-        fprintf(stderr, "unable to open file: %s\n", strerror(errno));
-        exit(4);
-    }
-
+int record_to_buffer( long *buffer, struct alsa_params alsa ) {
+    long loops;
+    int rc, dir, size;
+    snd_pcm_t *handle;
+    snd_pcm_hw_params_t *params;
+    snd_pcm_uframes_t frames;
+    handle = alsa.handle;
+    params = alsa.params;
+    frames = alsa.frames;
+//    static double *buffer;
 
 
     /*
      * This block takes care of the device initialisation
      */
-    handle = open_device( DEVICE, SND_PCM_STREAM_CAPTURE, 0 );
-    if (rc < 0) {
-        print_error_code( PCM_OPEN_FAIL );
-    }
+//    handle = open_device( DEVICE, SND_PCM_STREAM_CAPTURE, 0 );
+//    if (rc < 0) {
+//        print_error_code( PCM_OPEN_FAIL );
+//    }
 #ifdef VERBOSE
     check_state( handle );
 #endif
     // alloca hat keinen returnvalue da es ein Macro ist
-    snd_pcm_hw_params_malloc(&params);
+//    snd_pcm_hw_params_malloc(&params);
 
 
 
     /*
      * This Block prepares the device for usage
      */
-#ifdef DEBUG
+#ifdef PRINT_DEBUG
     printf("Preparing Device\n");
 #endif
-    rc = setup_pcm_struct( handle, params );
-    if (rc != OK) {
-        print_error_code( rc );
-        exit(1);
-    }
+//    rc = setup_pcm_struct( handle, params );
+//    if (rc != OK) {
+//        print_error_code( rc );
+//        exit(1);
+//    }
 
 
 
     /*
      * This Block takes care of the buffer, the sound is read to, before used further
      */
-#ifdef DEBUG
+#ifdef PRINT_DEBUG
     printf("Allocating Buffer\n");
 #endif
-    rc = snd_pcm_hw_params_get_period_size(params, &frames, &dir);
-    if (rc < 0) {
-        print_error_code( rc );
-        exit(1);
-    }
-    size = frames * 4;
-#ifdef VERBOSE
+//    rc = snd_pcm_hw_params_get_period_size(params, &frames, &dir);
+//    if (rc < 0) {
+//        print_error_code( rc );
+//        exit(1);
+//    }
+//    size = frames * 4;
+
+#ifdef PRINT_DEBUG
     printf("Size of Buffer is %i", size);
 #endif /*VERBOSE*/
-    buffer = (char *) malloc(size);
-    if (buffer == NULL){
-        print_error_code( MALLOC_ERROR );
-        return MALLOC_ERROR;
-    }
-#ifdef DEBUG
+//    buffer = (long *) malloc(size);
+//    if (buffer == NULL){
+//        print_error_code( MALLOC_ERROR );
+//        return MALLOC_ERROR;
+//    }
+#ifdef PRINT_DEBUG
     printf("Entering Loop\n");
 #endif
 
@@ -259,16 +166,7 @@ int record_to_file () {
     loops = 1;
     while (loops > 0) {
         loops--;
-#ifdef VERBOSE
-        t = clock();
-#endif
         rc = snd_pcm_readi(handle, buffer, frames);
-#ifdef VERBOSE
-        dt = clock() - t;
-        cycle = dt;
-        time_taken = ((double)dt)/CLOCKS_PER_SEC; // in seconds
-        printf("read: %f seconds\n", time_taken); 
-#endif
 
         if (rc == -EPIPE) {
             fprintf(stderr, "overrun occured\n");
@@ -278,51 +176,16 @@ int record_to_file () {
         }else if (rc != (int)frames) {
             fprintf(stderr, "short read, read %d frames\n", rc);
         } else {
-#ifdef DEBUG
+#ifdef PRINT_DEBUG
             printf("Frames read: %i\n", rc);
 #endif
         }
-#ifdef VERBOSE
-        t = clock();
-#endif
-        int 
-        rc = write(fd, buffer, size);
-        if (rc != size) {
-            fprintf(stderr, "short write: wrote %d bytes\n", rc);
-        }
-#ifdef VERBOSE
-        dt = clock() - t;
-        cycle = cycle + dt;
-        time_taken = ((double)dt)/CLOCKS_PER_SEC; // in seconds
-        printf("write: %f seconds\n", time_taken); 
-        time_taken = ((double)cycle)/CLOCKS_PER_SEC; // in seconds
-        printf("cycle: %f seconds\n", time_taken); 
-#endif
     }
-
-    int N = 20000;
-    in = (fftw_complex*) fftw_malloc( sizeof( fftw_complex ) * N );
-    out = (fftw_complex*) fftw_malloc( sizeof( fftw_complex ) * N );
-    printf("Creating plani\n");
-    p = fftw_plan_dft_1d( N, in, out, FFTW_FORWARD, FFTW_ESTIMATE );
-
-    read( fd, in, sizeof( fftw_complex ) * N);
-
-    printf("Executing plan\n");
-    fftw_execute(p);
-
-    fftw_destroy_plan(p);
-    fftw_free(in);
-    fftw_free(out);
 
     snd_pcm_drain(handle);
     snd_pcm_close(handle);
-    close(fd);
-    free(buffer);
-
-    return 0;
+//:    free(buffer);
+//    printf("%i\n", size);
+    return size;
 }
 
-int main() {
-    record_to_file();
-}

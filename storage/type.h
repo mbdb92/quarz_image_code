@@ -1,28 +1,16 @@
 #ifndef TYPE_H
 #define TYPE_H
 
-#include <stdlib.h>
-#include <alsa/asoundlib.h>
-
-struct pid_collection {
-    pid_t pid_alsa;
-    pid_t pid_fft_master;
-    pid_t pid_quarz;
-};
-
-struct alsa_params {
-    snd_pcm_t *handle;
-    snd_pcm_hw_params_t *params;
-    snd_pcm_uframes_t frames;
-    long *buffer;
-    int size;
-};
-/*
 #include <alsa/asoundlib.h>
 #include <fftw3.h>
 #include <MagickWand/MagickWand.h>
 #include <stdbool.h>
 
+#define ALSA_PCM_NEW_HW_PARAMS_API
+#define DEVICE "default"
+#define CHANNEL_NUMBER 1
+#define RATE 44100u
+#define FRAMES 32
 #define OK 0
 #define ERR 7
 #define E_MAL_FFT_IN 1
@@ -32,6 +20,12 @@ struct alsa_params {
 #define E_SET_COLOR 5
 #define E_MAL_MAGICK_COLOR 6
 #define E_MAL_BUF 8
+
+struct alsa_params {
+    snd_pcm_t *handle;
+    snd_pcm_hw_params_t *params;
+    snd_pcm_uframes_t frames;
+};
 
 struct fft_params {
     fftw_plan plan;
@@ -62,5 +56,4 @@ struct fft_data {
 struct quarz_data {
     struct fft_data fft;
 };
-*/
 #endif //TYPE_H

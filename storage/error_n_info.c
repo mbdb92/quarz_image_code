@@ -1,7 +1,3 @@
-#include "codes.h"
-#include "recorder.h"
-#include <stdio.h>
-#include <stdlib.h>
 
 // Helper function for debugging errors. If the device has a state error,
 // this function can check for the state

@@ -1,69 +1,83 @@
-//For Debugging
-#include <assert.h>
-// For alsa ahndling
-#include <alsa/asoundlib.h>
-// For defined functions
+// For wait
+#include <sys/wait.h>
+// For signals
+#include <signal.h>
+// For pipe, signals, wait
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+// For strlen
+#include <string.h>
+// For defines
+#include "codes.h"
 #include "type.h"
-#include "fft.h"
-#include "magick.h"
-#include "recorder.h"
+// For calling alsa child
+#include "alsa.h"
 
-int main() {
+//Signal Handler Definition
+void handler_sig_quit( int signum );
 
-    /*
-     * These two structs contain every value needed during runtime
-     * Constants are excluded
-     */
-    struct quarz_params *params;
-    struct quarz_data *data;
-    int return_value, dir;
-    long *audio_buffer;
+int main () {
+    int pipefd[2];
+    int return_value, status;
+    struct pid_collection pids;
+    // To check if signalhandler is set correctly
+    void (*sig_handler_return) (int);
 
-    params = malloc( sizeof(struct quarz_params) );
-    data = malloc( sizeof(struct quarz_data) );
+    sig_handler_return = signal( SIGQUIT, handler_sig_quit );
+    if( sig_handler_return == SIG_ERR )
+        return E_SIGH_QUARZ;
 
-    params->alsa.handle = open_device( DEVICE, SND_PCM_STREAM_CAPTURE, 0 );
-    snd_pcm_hw_params_malloc( &params->alsa.params );
+    return_value = pipe(pipefd);
+    if( return_value != OK )
+        return E_PIPE;
 
-    return_value = setup_pcm_struct( params->alsa.handle, params->alsa.params );
-    return_value = snd_pcm_hw_params_get_period_size( params->alsa.params, &params->alsa.frames, &dir );
-    params->fft.size = params->alsa.frames * 4;
+    pids.pid_alsa = fork();
+    if( pids.pid_alsa == OK ) {
+        int rc;
 
-    audio_buffer = (long *) malloc(params->fft.size);
-    if( audio_buffer == NULL ) {
-        return E_MAL_BUF;
+        rc = alsa_handler( pipefd );
+
+    } else if( pids.pid_alsa == -1 ) {
+        return E_FORK;
+    } else {
+
+        pids.pid_fft_master = fork();
+        if( pids.pid_fft_master == OK ) {
+            //Load child code
+        } else if( pids.pid_fft_master == -1 ){
+            return E_FORK;
+        } else {
+
+            pids.pid_quarz = getpid();
+            sleep(2);
+            write( pipefd[1], &pids, sizeof(pids) );
+            kill( pids.pid_alsa, SIGPIPE);
+
+        /*
+         * This part war staken from "man 3 wait"
+         * Check it for references and additions
+         * TODO Enhance this part to be more useful
+         */
+            do {
+                waitpid( pids.pid_alsa, &status, WUNTRACED
+            #ifdef WCONTINUED
+                        | WCONTINUED 
+            #endif
+                        );
+            } while( !WIFEXITED(status) );
+
+        }
     }
 
-    return_value = record_to_buffer( audio_buffer, params->alsa );
-    params->fft.size = return_value;
-#ifdef PRINT_DEBUG
-    printf("Size of frame: ");
-    printf("%i\n", params->fft.size);
-#endif
-
-    /*
-     * this block calls the setup functions for startup
-     */
-    return_value = create_fft( &params->fft, &data->fft );
-    if( return_value != OK )
-        return ERR;
-    return_value = setup_drawing( &params->magick );
-    if( return_value != OK )
-        return ERR;
-
-    run_fft( &params->fft, &data->fft, audio_buffer );
-    run_magick_from_fft( &params->magick, &data->fft, (unsigned long) params->fft.size );
-
-    /*
-     * This block contains the tear-down functions
-     */
-    printf("Starting cleanup\n");
-    destroy_fft( &params->fft, &data->fft );
-    destroy_drawing( &params->magick );
-
-    printf("Freeing buffers\n");
-//    free(audio_buffer);
-    free(params);
-    free(data);
     return OK;
+}
+
+void handler_sig_quit( int signum ) {
+    /*
+     * CHeck i.e. "man 3 wait" for more stuff
+     * which can be done here. Especially the examples
+     * TODO Fill code
+     */
+    // Sending signal to childs
 }
