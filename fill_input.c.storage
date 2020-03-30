@@ -1,0 +1,79 @@
+
+
+/*
+ * these for-loops generate a mixed cos function
+ * Used for testing and controlled dev
+ */
+int fill_input_struct( struct fft_params *fft_p, struct fft_data *fft_d, double *in  ) {
+    double x, val;
+    float c;
+    val = PI / 180;
+
+    for( int i = 0; i < fft_p->size; i++ ){
+        x = 1.0 * i;
+        c = cos(x*val);
+        fft_d->fft_in[i] = c;
+        in[i] = c;
+        if (c != fft_d->fft_in[i] )
+            return E_W_COS;
+    }
+    for( int i = 0; i < fft_p->size; i++ ){
+        x = 10.0 * i;
+        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
+        in[i] = in[i] + cos(x*val);
+    }
+    for( int i = 0; i < fft_p->size; i++ ){
+        x = 10.0 * i;
+        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
+        in[i] = in[i] + cos(x*val);
+    }
+    for( int i = 0; i < fft_p->size; i++ ){
+        x = 50.0 * i;
+        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
+        in[i] = in[i] + cos(x*val);
+    }
+    for( int i = 0; i < fft_p->size; i++ ){
+        x = 49.0 * i;
+        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
+        in[i] = in[i] + cos(x*val);
+    }
+    for( int i = 0; i < fft_p->size; i++ ){
+        x = 48.0 * i;
+        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
+        in[i] = in[i] + cos(x*val);
+    }
+    for( int i = 0; i < fft_p->size; i++ ){
+        x = 10.0 * i;
+        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
+        in[i] = in[i] + cos(x*val);
+    }
+    for( int i = 0; i < fft_p->size; i++ ){
+        x = 47.0 * i;
+        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
+        in[i] = in[i] + cos(x*val);
+    }
+    for( int i = 0; i < fft_p->size; i++ ){
+        x = 46.0 * i;
+        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
+        in[i] = in[i] + cos(x*val);
+    }
+    for( int i = 0; i < fft_p->size; i++ ){
+        x = 45.0 * i;
+        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
+        in[i] = in[i] + cos(x*val);
+    }
+
+    for( int i = 0; i < fft_p->size; i++ ){
+        x = 5.0 * i;
+        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
+        in[i] = in[i] + cos(x*val);
+#ifdef PRINT_DEBUG
+//        fprintf(outfile, "%lf\n", *fft_d->fft_in[i]);
+//        fprintf(outfile, "%lf\n", *in[i]);
+//        printf("%f\n", in[i][0]);
+//        printf("%f\n", fft_d->fft_in[i][0]);
+#endif
+    }
+
+    return OK;
+}

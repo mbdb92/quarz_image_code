@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <alsa/asoundlib.h>
+#include <fftw3.h>
 
 struct pid_collection {
     pid_t pid_alsa;
@@ -17,9 +18,19 @@ struct alsa_params {
     long *buffer;
     int size;
 };
+
+struct fft_params {
+    fftw_plan plan;
+    int size;
+    int rank;
+};
+
+struct fft_data {
+    double *fft_in;
+    double *fft_out;
+};
 /*
 #include <alsa/asoundlib.h>
-#include <fftw3.h>
 #include <MagickWand/MagickWand.h>
 #include <stdbool.h>
 
@@ -32,12 +43,6 @@ struct alsa_params {
 #define E_SET_COLOR 5
 #define E_MAL_MAGICK_COLOR 6
 #define E_MAL_BUF 8
-
-struct fft_params {
-    fftw_plan plan;
-    int size;
-    int rank;
-};
 
 struct magick_params {
     MagickWand *m_wand;
@@ -52,11 +57,6 @@ struct quarz_params {
     struct alsa_params alsa;
     struct fft_params fft;
     struct magick_params magick;
-};
-
-struct fft_data {
-    double *fft_in;
-    double *fft_out;
 };
 
 struct quarz_data {

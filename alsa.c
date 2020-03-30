@@ -3,6 +3,7 @@
 // for file access
 #include <signal.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <fcntl.h>
@@ -114,28 +115,24 @@ int record_to_buffer( long *buffer, struct alsa_params alsa ) {
 
     snd_pcm_hw_params_free(params);
 
-    loops = 1;
-    while (loops > 0) {
-        loops--;
-        rc = snd_pcm_readi(handle, buffer, frames);
+    rc = snd_pcm_readi(handle, buffer, frames);
 
-        if (rc == -EPIPE) {
-            fprintf(stderr, "overrun occured\n");
-            snd_pcm_prepare(handle);
-        }else if (rc < 0) {
-            fprintf(stderr, "error from read: %s\n", snd_strerror(rc));
-        }else if (rc != (int)frames) {
-            fprintf(stderr, "short read, read %d frames\n", rc);
-        } else {
+    if (rc == -EPIPE) {
+        fprintf(stderr, "overrun occured\n");
+        snd_pcm_prepare(handle);
+    }else if (rc < 0) {
+        fprintf(stderr, "error from read: %s\n", snd_strerror(rc));
+    }else if (rc != (int)frames) {
+        fprintf(stderr, "short read, read %d frames\n", rc);
+    } else {
 #ifdef PRINT_DEBUG
-            printf("Frames read: %i\n", rc);
+        printf("Frames read: %i\n", rc);
 #endif
-        }
     }
 
 //    free(buffer);
 //    printf("%i\n", size);
-    return size;
+    return OK;
 }
 
 
@@ -146,23 +143,44 @@ int alsa_handler( int pipefd[2] ) {
     struct alsa_params *alsa;
     int rc, dir;
     void (*sigHandlerReturn)(int);
+    // For runtime
+    long *buffer;
+    bool loop;
 
     // For Signal Handler status
     alsa_state = ZERO;
     pids = malloc( sizeof(struct pid_collection) );
     alsa = malloc( sizeof(struct alsa_params) );
+    loop = true;
 
-    sigHandlerReturn = signal( SIGPIPE, handler_get_pid );
+    /*
+     * registering sig handlers
+     * sig pipe for quarz, once input is in pipe,
+     * sig cont for fft_handler
+     */
+    sigHandlerReturn = signal( SIGPIPE, alsa_sig_handler );
+    if ( sigHandlerReturn == SIG_ERR ) {
+        return 1;
+    }
+    sigHandlerReturn = signal( SIGCONT, alsa_sig_handler );
     if ( sigHandlerReturn == SIG_ERR ) {
         return 1;
     }
 
-    // Wait to get pids
+    /*
+     * This block comunicates with quarz to get pids
+     */
+    pids->pid_quarz = getppid();
+    // Ready to recive signal
+    kill( pids->pid_quarz, SIGCONT );
+    // Wait to get pids, if fft process isn't forked yet i.e.
     pause();
 
+    //TODO: add error handling for incomplete read
     read( pipefd[0], pids, sizeof(pids) );
+    // Tell quarz you are done
+    kill( pids->pid_quarz, SIGCONT );
 
-    return 0;
     /*
      * This block takes care of the device initialisation
      */
@@ -210,6 +228,15 @@ int alsa_handler( int pipefd[2] ) {
     printf("Entering Loop\n");
 #endif
 
+    while( loop == true ) {
+        rc = recorc_to_buffer( buffer, *alsa );
+        if( rc != OK ){
+            return 1;
+        }
+
+        write( pipefd[1], &buffer, sizeof(buffer) );
+        kill( pids->pid_fft_master, SIGPIPE );
+    }
 
     snd_pcm_drain(alsa->handle);
     snd_pcm_close(alsa->handle);
@@ -219,7 +246,7 @@ int alsa_handler( int pipefd[2] ) {
 }
 
 
-void handler_get_pid( int signum ) {
+void alsa_sig_handler( int signum ) {
     if( signum == SIGPIPE ) {
         alsa_state = READ_PIPE;
     }
