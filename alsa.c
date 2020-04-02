@@ -185,22 +185,30 @@ int alsa_handler( int pipefd[2] ) {
      * This block comunicates with quarz to get pids
      */
     pids->pid_quarz = getppid();
+    pids->pid_alsa = getpid();
     // Ready to recive signal
     kill( pids->pid_quarz, SIGCONT );
+#ifdef PRINT_DEBUG
+    printf("%i: send SIGCONT to %i\n", pids->pid_alsa, pids->pid_quarz);
+#endif
     // Wait to get pids, if fft process isn't forked yet i.e.
     if( alsa_state != READ_PIPE ) {
 #ifdef PRINT_DEBUG
-        printf("alsa: Waiting for SIGPIPE!\n");
+        printf("%i: Waiting for SIGPIPE!\n", pids->pid_alsa);
 #endif
         pause();
     }
 
     //TODO: add error handling for incomplete read
     read( pipefd[0], pids, sizeof(pids) );
-    printf("alsa: pids %i, %i, %i\n", pids->pid_quarz, pids->pid_alsa, pids->pid_fft_master);
+    printf("%i: pids %i, %i, %i\n", pids->pid_alsa, pids->pid_quarz, pids->pid_alsa, pids->pid_fft_master);
     // Tell quarz you are done
     kill( pids->pid_fft_master, SIGCONT );
+#ifdef PRINT_DEBUG
+    printf("%i: send SIGCONT to %i\n", pids->pid_alsa, pids->pid_fft_master);
+#endif
 
+    pause();
     /*
      * This block takes care of the device initialisation
      */
@@ -237,13 +245,16 @@ int alsa_handler( int pipefd[2] ) {
     alsa->size = alsa->frames * 4;
     if( alsa_state != SIZE_NEEDED ) {
 #ifdef PRINT_DEBUG
-        printf("alsa: Waiting for SIGURG!\n");
+        printf("%i: Waiting for SIGURG!\n", pids->pid_alsa);
 #endif
         pause();
     }
 
     write( pipefd[1], alsa->size, sizeof(alsa->size) );
     kill( pids->pid_fft_master, SIGURG );
+#ifdef PRINT_DEBUG
+    printf("%i: send SIGURG to %i\n", pids->pid_alsa, pids->pid_fft_master);
+#endif
 
 #ifdef PRINT_DEBUG
     printf("Size of Buffer is %i", alsa->size);
@@ -259,7 +270,7 @@ int alsa_handler( int pipefd[2] ) {
 
     if( alsa_state != RUNTIME ) {
 #ifdef PRINT_DEBUG
-        printf("alsa: Waiting for SIGCONT!\n");
+        printf("%i: Waiting for SIGCONT!\n", pids->pid_alsa);
 #endif
         pause();
     }

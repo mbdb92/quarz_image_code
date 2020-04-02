@@ -91,19 +91,23 @@ int fft_handler( int pipefd[2] ) {
      * once done, return signal to quarz that everything is done
      */
     pids->pid_quarz = getppid();
+    pids->pid_fft_master = getpid();
     // Should the signal from quarz been raised allready just continue
     printf("test %i\n", fft_pipe_state);
     if( fft_pipe_state != ALSA_DONE ){
 #ifdef PRINT_DEBUG
-        printf("fft: waiting for SIGCONT, alsa not done\n");
+        printf("%i: waiting for SIGCONT, alsa not done\n", pids->pid_fft_master);
 #endif
         pause();
     }
     // Tell quarz your are ready
     kill( pids->pid_quarz, SIGCONT );
+#ifdef PRINT_DEBUG
+    printf("%i: send SIGCONT to %i\n", pids->pid_fft_master, pids->pid_quarz);
+#endif
     if( fft_pipe_state != READ_PIPE ) {
 #ifdef PRINT_DEBUG
-        printf("fft: waiting for SIGPIPE to read pids\n");
+        printf("%i: waiting for SIGPIPE to read pids\n", pids->pid_fft_master);
 #endif
         pause();
     }
@@ -113,17 +117,23 @@ int fft_handler( int pipefd[2] ) {
         return ERR;
     }
     if( retval != sizeof(pids) ) {
-        printf("fft: short read!\n");
+        printf("%i: short read!\n", pids->pid_fft_master);
     }
-    printf("fft: pids %i, %i, %i\n", pids->pid_quarz, pids->pid_alsa, pids->pid_fft_master);
+    printf("%i: pids %i, %i, %i\n", pids->pid_fft_master, pids->pid_quarz, pids->pid_alsa, pids->pid_fft_master);
     // Tell quarz you are done
     kill( pids->pid_quarz, SIGCONT );
+#ifdef PRINT_DEBUG
+    printf("%i: send SIGCONT to %i\n", pids->pid_fft_master, pids->pid_quarz);
+#endif
 
     fft_pipe_state = SIZE_NEEDED;
-    kill( pids->pid_alsa, SIGCONT );
+    kill( pids->pid_alsa, SIGURG );
+#ifdef PRINT_DEBUG
+    printf("%i: send SIGURG to %i\n", pids->pid_fft_master, pids->pid_alsa);
+#endif
     if( fft_pipe_state != READ_PIPE ) {
 #ifdef PRINT_DEBUG
-        printf("fft: waiting for SIGPIPE to get size\n");
+        printf("%i: waiting for SIGPIPE to get size\n", pids->pid_fft_master);
 #endif
         pause();
     }
@@ -139,6 +149,9 @@ int fft_handler( int pipefd[2] ) {
 
     fft_pipe_state = RUNTIME;
     kill( pids->pid_alsa, SIGCONT );
+#ifdef PRINT_DEBUG
+    printf("%i: send SIGCONT to %i\n", pids->pid_fft_master, pids->pid_alsa);
+#endif
     /*
     for( int i = 0; i < fft_p->size; i++ ) {
         in[i] = (double) buffer[i];
