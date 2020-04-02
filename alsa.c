@@ -7,11 +7,14 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <fcntl.h>
+// For sighandler
+#include "sighandler.h"
+
 #include "type.h"
 #include "codes.h"
 #include "error_n_info.h"
 
-int alsa_state;
+//int alsa_state;
 
 /*
  * This takes the pointer to the array of params and sets the needed parameters
@@ -22,6 +25,7 @@ int alsa_state;
  * TODO: Resolving error with this function and removing this comment
  * TODO: Change so SND_PCM_ACCESS can be changed
  */
+
 int setup_pcm_struct( snd_pcm_t *handle, snd_pcm_hw_params_t *params ) {
     int rc, dir;
     unsigned int rate = RATE;
@@ -94,6 +98,12 @@ snd_pcm_t * open_device( const char *name, snd_pcm_stream_t stream, int mode ) {
     return handle;
 }
 
+int close_device( struct alsa_params *alsa ) {
+    snd_pcm_drain(alsa->handle);
+    snd_pcm_close(alsa->handle);
+
+    return OK;
+}
 
 int record_to_buffer( long *buffer, struct alsa_params alsa ) {
     long loops;
@@ -166,6 +176,10 @@ int alsa_handler( int pipefd[2] ) {
     if ( sigHandlerReturn == SIG_ERR ) {
         return 1;
     }
+    sigHandlerReturn = signal( SIGURG, alsa_sig_handler );
+    if ( sigHandlerReturn == SIG_ERR ) {
+        return 1;
+    }
 
     /*
      * This block comunicates with quarz to get pids
@@ -174,12 +188,18 @@ int alsa_handler( int pipefd[2] ) {
     // Ready to recive signal
     kill( pids->pid_quarz, SIGCONT );
     // Wait to get pids, if fft process isn't forked yet i.e.
-    pause();
+    if( alsa_state != READ_PIPE ) {
+#ifdef PRINT_DEBUG
+        printf("alsa: Waiting for SIGPIPE!\n");
+#endif
+        pause();
+    }
 
     //TODO: add error handling for incomplete read
     read( pipefd[0], pids, sizeof(pids) );
+    printf("alsa: pids %i, %i, %i\n", pids->pid_quarz, pids->pid_alsa, pids->pid_fft_master);
     // Tell quarz you are done
-    kill( pids->pid_quarz, SIGCONT );
+    kill( pids->pid_fft_master, SIGCONT );
 
     /*
      * This block takes care of the device initialisation
@@ -215,6 +235,15 @@ int alsa_handler( int pipefd[2] ) {
         exit(1);
     }
     alsa->size = alsa->frames * 4;
+    if( alsa_state != SIZE_NEEDED ) {
+#ifdef PRINT_DEBUG
+        printf("alsa: Waiting for SIGURG!\n");
+#endif
+        pause();
+    }
+
+    write( pipefd[1], alsa->size, sizeof(alsa->size) );
+    kill( pids->pid_fft_master, SIGURG );
 
 #ifdef PRINT_DEBUG
     printf("Size of Buffer is %i", alsa->size);
@@ -228,27 +257,27 @@ int alsa_handler( int pipefd[2] ) {
     printf("Entering Loop\n");
 #endif
 
+    if( alsa_state != RUNTIME ) {
+#ifdef PRINT_DEBUG
+        printf("alsa: Waiting for SIGCONT!\n");
+#endif
+        pause();
+    }
     while( loop == true ) {
-        rc = recorc_to_buffer( buffer, *alsa );
+        rc = record_to_buffer( buffer, *alsa );
         if( rc != OK ){
             return 1;
         }
 
         write( pipefd[1], &buffer, sizeof(buffer) );
         kill( pids->pid_fft_master, SIGPIPE );
+        loop = false;
     }
 
-    snd_pcm_drain(alsa->handle);
-    snd_pcm_close(alsa->handle);
+    rc = close_device( alsa );
     free(alsa->buffer);
     free(alsa);
-    return 0;
+    free(pids);
+    return OK;
 }
 
-
-void alsa_sig_handler( int signum ) {
-    if( signum == SIGPIPE ) {
-        alsa_state = READ_PIPE;
-    }
-    return;
-}

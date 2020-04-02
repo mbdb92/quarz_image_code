@@ -5,6 +5,14 @@
 #include <alsa/asoundlib.h>
 #include <fftw3.h>
 
+typedef int bool;
+#define true 1
+#define false 0
+
+int alsa_state;
+int quarz_pipe_state;
+int fft_pipe_state;
+
 struct pid_collection {
     pid_t pid_alsa;
     pid_t pid_fft_master;

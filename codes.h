@@ -11,9 +11,12 @@
 #define ALSA_DONE 4
 #define FFT_READY 8
 #define PIPE_DONE 16
+#define SIZE_NEEDED 8
+#define RUNTIME 16
 #define READ_PIPE 1
 
 #define OK 0
+#define ERR 1
 #define E_SIGH_QUARZ 1
 #define E_PIPE 2
 #define E_FORK 3

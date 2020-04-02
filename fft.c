@@ -13,11 +13,12 @@
 // For Signals
 #include <signal.h>
 #include <unistd.h>
+#include "sighandler.h"
 
 #include "fft.h"
 
 void fft_sig_handler( int signum );
-int fft_pipe_state;
+//int fft_pipe_state;
 
 /*
  * This Function sets up the needed structs
@@ -52,7 +53,6 @@ int fft_handler( int pipefd[2] ) {
     struct fft_params *fft_p;
     struct fft_data *fft_d;
     double *in;
-    long *buffer;
     fftw_plan plan;
     int retval;
     void (*sig_handler_return) (int);
@@ -73,18 +73,16 @@ int fft_handler( int pipefd[2] ) {
     if( sig_handler_return == SIG_ERR )
         return 1;
 
+    sig_handler_return = signal( SIGURG, fft_sig_handler );
+    if( sig_handler_return == SIG_ERR )
+        return 1;
+
     /* 
      * The needed structs
      */
     pids = malloc( sizeof(struct pid_collection) );
     fft_p = malloc( sizeof(struct fft_params) );
     fft_d = malloc( sizeof(struct fft_data) );
-    buffer = malloc( sizeof(struct buffer) );
-    /*
-     * This is currently needed, as using the fft_d->fft_in array doesn't work
-     * TODO: Fix error
-     */
-    in = (double*) fftw_malloc(sizeof(fftw_complex) * fft_p->size);
     //plan = fftw_plan_dft_1d(fft_p->size, fft_d->fft_in, fft_d->fft_out, FFTW_FORWARD, FFTW_ESTIMATE);
 
     /*
@@ -94,26 +92,59 @@ int fft_handler( int pipefd[2] ) {
      */
     pids->pid_quarz = getppid();
     // Should the signal from quarz been raised allready just continue
-    if( fft_pipe_state != ALSA_DONE )
+    printf("test %i\n", fft_pipe_state);
+    if( fft_pipe_state != ALSA_DONE ){
+#ifdef PRINT_DEBUG
+        printf("fft: waiting for SIGCONT, alsa not done\n");
+#endif
         pause();
-
+    }
     // Tell quarz your are ready
     kill( pids->pid_quarz, SIGCONT );
-    pause();
-
+    if( fft_pipe_state != READ_PIPE ) {
+#ifdef PRINT_DEBUG
+        printf("fft: waiting for SIGPIPE to read pids\n");
+#endif
+        pause();
+    }
     // TODO: Add error handling for incomplete read
-    read( pipefd[0], pids, sizeof(pids) );
+    retval = read( pipefd[0], pids, sizeof(pids) );
+    if( retval < 0 ) {
+        return ERR;
+    }
+    if( retval != sizeof(pids) ) {
+        printf("fft: short read!\n");
+    }
+    printf("fft: pids %i, %i, %i\n", pids->pid_quarz, pids->pid_alsa, pids->pid_fft_master);
     // Tell quarz you are done
     kill( pids->pid_quarz, SIGCONT );
 
-    fft_pipe_state = RUNTIME;
+    fft_pipe_state = SIZE_NEEDED;
+    kill( pids->pid_alsa, SIGCONT );
+    if( fft_pipe_state != READ_PIPE ) {
+#ifdef PRINT_DEBUG
+        printf("fft: waiting for SIGPIPE to get size\n");
+#endif
+        pause();
+    }
+    read( pipefd[0], fft_p->size, sizeof(fft_p->size) );
+
+    /*
+     * This is currently needed, as using the fft_d->fft_in array doesn't work
+     * TODO: Fix error
+     */
+    in = (double*) fftw_malloc(sizeof(fftw_complex) * fft_p->size);
 
     fft_p->plan = fftw_plan_r2r_1d(fft_p->size, in, fft_d->fft_out, FFTW_DHT, FFTW_ESTIMATE);
 
-    pause();
+    fft_pipe_state = RUNTIME;
+    kill( pids->pid_alsa, SIGCONT );
+    /*
     for( int i = 0; i < fft_p->size; i++ ) {
         in[i] = (double) buffer[i];
     }
+    */
+    read( pipefd[0], in, sizeof( in ) );
 
 //    free(buffer);
 //    retval = fill_input_struct( fft_p, fft_d, in );
@@ -127,33 +158,11 @@ int fft_handler( int pipefd[2] ) {
         printf("%f\n", fft_d->fft_out[i]);
     }
     fftw_free(in);
+    destroy_fft( fft_p, fft_d );
+    free(fft_d);
+    free(fft_p);
+    free(pids);
 
     return OK;
 }
 
-void fft_handler_sig_pipe( int signum ) {
-    if( signum == SIGPIPE ) {
-        switch (fft_pipe_state) {
-            case ALSA_DONE:
-                break;
-            case RUNTIME:
-                break;
-            default:
-                exit SIG_ERR;
-                break;
-        }
-        return;
-    if( signum == SIGCONT ) {
-        switch (fft_pipe_state) {
-            case ZERO:
-                fft_pipe_state = ALSA_DONE;
-                break;
-            default:
-                exit SIG_ERR;
-                break;
-        }
-        return;
-    } else {
-        exit SIG_ERR;
-    }
-}

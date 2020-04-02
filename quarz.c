@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include "sighandler.h"
 // For strlen
 #include <string.h>
 // For defines
@@ -13,10 +14,11 @@
 #include "type.h"
 // For calling alsa child
 #include "alsa.h"
+#include "fft.h"
 
 //Signal Handler Definition
 void quarz_sig_handler( int signum );
-int quarz_pipe_state;
+//int quarz_pipe_state;
 
 int main () {
     int pipefd[2];
@@ -25,8 +27,15 @@ int main () {
     // To check if signalhandler is set correctly
     void (*sig_handler_return) (int);
 
+    // Used for transfer of pid to childs later
     quarz_pipe_state = ZERO;
 
+    /*
+     * Setting up the sighandler for the two used signals by its child
+     * SIGCONT to show it's ready to recieve
+     * SIGPIPE is currently not needed
+     * TODO remove SIGPIPE if unused in the end
+     */
     sig_handler_return = signal( SIGPIPE, quarz_sig_handler );
     if( sig_handler_return == SIG_ERR )
         return E_SIGH_QUARZ;
@@ -34,10 +43,12 @@ int main () {
     if( sig_handler_return == SIG_ERR )
         return E_SIGH_QUARZ;
 
+    // Setup of the pipe
     return_value = pipe(pipefd);
     if( return_value != OK )
         return E_PIPE;
 
+    // Forking for alsa
     pids.pid_alsa = fork();
     if( pids.pid_alsa == OK ) {
         int rc;
@@ -46,16 +57,21 @@ int main () {
 
     } else if( pids.pid_alsa == -1 ) {
         return E_FORK;
+    // quarz continues here
     } else {
 
+        // Fork for fft handler
         pids.pid_fft_master = fork();
         if( pids.pid_fft_master == OK ) {
             int rc;
 
-            rc = run_fft( pipefd );
+            rc = fft_handler( pipefd );
 
         } else if( pids.pid_fft_master == -1 ){
             return E_FORK;
+        /*
+         * This part is the quarz main task
+         */
         } else {
 
             /*
@@ -66,31 +82,41 @@ int main () {
             // For ALSA
             pids.pid_quarz = getpid();
             // If alsa hasn't raised the continue signal
-            while( quarz_pipe_state != ALSA_READY ) {
+            if( quarz_pipe_state != ALSA_READY ) {
+#ifdef PRINT_DEBUG
+                printf("quarz: waiting for SIGCONT!\n");
+#endif
                 pause();
             }
             write( pipefd[1], &pids, sizeof(pids) );
+            printf("quarz: pids %i, %i, %i\n", pids.pid_quarz, pids.pid_alsa, pids.pid_fft_master);
             // Tells alsa to read the pipe
             kill( pids.pid_alsa, SIGPIPE);
+            quarz_pipe_state = ALSA_DONE;
 
             // To give alsa some time to read the pipe
-            sleep(1);
+            // and wait for fft_master
 
-            // For FFT Master
-            // Tells him, that piping to alsa is done
-            kill( pids.pid_fft_master, SIGCONT);
             // Waits for fft to be ready
-            while( quarz_pipe_state != FFT_READY ) {
+            if ( quarz_pipe_state != FFT_READY ) {
+#ifdef PRINT_DEBUG
+                printf("quarz: waiting for SIGCONT!\n");
+#endif
                 pause();
             }
             write( pipefd[1], &pids, sizeof(pids) );
+            printf("quarz: pids %i, %i, %i\n", pids.pid_quarz, pids.pid_alsa, pids.pid_fft_master);
             // Tells fft to read pipe
             kill( pids.pid_fft_master, SIGPIPE);
 
             // For fft to wrap up
-            sleep(1);
+#ifdef PRINT_DEBUG
+                printf("quarz: waiting for SIGCONT!\n");
+#endif
+            pause();
             
 #ifdef PRINT_DEBUG
+            printf("quarz.c setup done\n");
             printf("Quarz pipe state is: %i\n", quarz_pipe_state);
 #endif
         /*
@@ -110,34 +136,4 @@ int main () {
     }
 
     return OK;
-}
-
-void handler_sig_pipe( int signum ) {
-    /*
-     * CHeck i.e. "man 3 wait" for more stuff
-     * which can be done here. Especially the examples
-     * TODO Fill code
-     */
-    if( signum == SIGCONT ) {
-        switch (quarz_pipe_state) {
-            case ZERO:
-                quarz_pipe_state = ALSA_READY;
-                break;
-            case ALSA_READY:
-                quarz_pipe_state = ALSA_DONE;
-                break;
-            case ALSA_DONE:
-                quarz_pipe_state = FFT_READY;
-                break;
-            case FFT_READY:
-                quarz_pipe_state = PIPE_DONE;
-                break;
-            default:
-                exit SIG_ERR;
-                break;
-        }
-        return;
-    } else {
-        exit SIG_ERR;
-    }
 }
