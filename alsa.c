@@ -189,26 +189,27 @@ int alsa_handler( int pipefd[2] ) {
     // Ready to recive signal
     kill( pids->pid_quarz, SIGCONT );
 #ifdef PRINT_DEBUG
-    printf("%i: send SIGCONT to %i\n", pids->pid_alsa, pids->pid_quarz);
+    printf("(alsa) %i: send SIGCONT to %i\n", pids->pid_alsa, pids->pid_quarz);
 #endif
     // Wait to get pids, if fft process isn't forked yet i.e.
-    if( alsa_state != READ_PIPE ) {
+    if( !((alsa_state & READ_PIPE) >> SHIFT_R_P ) ) {
 #ifdef PRINT_DEBUG
-        printf("%i: Waiting for SIGPIPE!\n", pids->pid_alsa);
+        printf("(alsa) %i: Waiting for SIGPIPE!\n", pids->pid_alsa);
 #endif
-        pause();
+        //pause();
+        suspend( &alsa_state, READ_PIPE, SHIFT_R_P );
     }
 
     //TODO: add error handling for incomplete read
     read( pipefd[0], pids, sizeof(pids) );
-    printf("%i: pids %i, %i, %i\n", pids->pid_alsa, pids->pid_quarz, pids->pid_alsa, pids->pid_fft_master);
+    printf("(alsa) %i: pids %i, %i, %i\n", pids->pid_alsa, pids->pid_quarz, pids->pid_alsa, pids->pid_fft_master);
     // Tell quarz you are done
     kill( pids->pid_fft_master, SIGCONT );
 #ifdef PRINT_DEBUG
-    printf("%i: send SIGCONT to %i\n", pids->pid_alsa, pids->pid_fft_master);
+    printf("(alsa) %i: send SIGCONT to %i\n", pids->pid_alsa, pids->pid_fft_master);
 #endif
 
-    pause();
+    //pause();
     /*
      * This block takes care of the device initialisation
      */
@@ -223,7 +224,7 @@ int alsa_handler( int pipefd[2] ) {
      * This Block prepares the device for usage
      */
 #ifdef PRINT_DEBUG
-    printf("Preparing Device\n");
+    printf("(alsa) Preparing Device\n");
 #endif
     rc = setup_pcm_struct( alsa->handle, alsa->params );
     if (rc != OK) {
@@ -235,7 +236,7 @@ int alsa_handler( int pipefd[2] ) {
      * This Block takes care of the buffer, the sound is read to, before used further
      */
 #ifdef PRINT_DEBUG
-    printf("Allocating Buffer\n");
+    printf("(alsa) Allocating Buffer\n");
 #endif
     rc = snd_pcm_hw_params_get_period_size(alsa->params, &alsa->frames, &dir);
     if (rc < 0) {
@@ -243,21 +244,22 @@ int alsa_handler( int pipefd[2] ) {
         exit(1);
     }
     alsa->size = alsa->frames * 4;
-    if( alsa_state != SIZE_NEEDED ) {
+    if( !((alsa_state & SIZE_NEEDED) >> SHIFT_S_N) ) {
 #ifdef PRINT_DEBUG
-        printf("%i: Waiting for SIGURG!\n", pids->pid_alsa);
+        printf("(alsa) %i: Waiting for SIGURG!\n", pids->pid_alsa);
 #endif
-        pause();
+        //pause();
+        suspend( &alsa_state, SIZE_NEEDED, SHIFT_S_N );
     }
 
-    write( pipefd[1], alsa->size, sizeof(alsa->size) );
+    write( pipefd[1], &alsa->size, sizeof(alsa->size) );
     kill( pids->pid_fft_master, SIGURG );
 #ifdef PRINT_DEBUG
-    printf("%i: send SIGURG to %i\n", pids->pid_alsa, pids->pid_fft_master);
+    printf("(alsa) %i: send SIGURG to %i\n", pids->pid_alsa, pids->pid_fft_master);
 #endif
 
 #ifdef PRINT_DEBUG
-    printf("Size of Buffer is %i", alsa->size);
+    printf("(alsa) Size of Buffer is %i", alsa->size);
 #endif /*VERBOSE*/
     alsa->buffer = (long *) malloc(alsa->size);
     if (alsa->buffer == NULL){
@@ -265,13 +267,14 @@ int alsa_handler( int pipefd[2] ) {
         return MALLOC_ERROR;
     }
 #ifdef PRINT_DEBUG
-    printf("Entering Loop\n");
+    printf("(alsa) Entering Loop\n");
 #endif
 
-    if( alsa_state != RUNTIME ) {
+    if( !((alsa_state & RUNTIME) >> SHIFT_R ) ) {
 #ifdef PRINT_DEBUG
-        printf("%i: Waiting for SIGCONT!\n", pids->pid_alsa);
+        printf("(alsa) %i: Waiting for SIGCONT!\n", pids->pid_alsa);
 #endif
+        suspend( &alsa_state, RUNTIME, SHIFT_R );
         pause();
     }
     while( loop == true ) {

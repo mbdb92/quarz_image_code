@@ -14,30 +14,35 @@ void quarz_sig_handler( int signum ) {
      * TODO Fill code
      */
     if( signum == SIGCONT ) {
-        switch (quarz_pipe_state) {
-            case ZERO:
-                quarz_pipe_state = ALSA_READY;
+        if( quarz_pipe_state == ZERO ) {
+            quarz_pipe_state += ALSA_READY;
 #ifdef PRINT_DEBUG
-                printf("quarz caught SIGCONT, state = %i\n", quarz_pipe_state);
+            printf("quarz caught SIGCONT, state = %i\n", quarz_pipe_state);
 #endif
-                break;
-            case ALSA_DONE:
-                quarz_pipe_state = FFT_READY;
-#ifdef PRINT_DEBUG
-                printf("quarz caught SIGCONT, state = %i\n", quarz_pipe_state);
-#endif
-                break;
-            case FFT_READY:
-                quarz_pipe_state = PIPE_DONE;
-#ifdef PRINT_DEBUG
-                printf("quarz caught SIGCONT, state = %i\n", quarz_pipe_state);
-#endif
-                break;
-            default:
-             //   exit SIG_ERR;
-                break;
+            return ;
         }
-        return;
+            
+        if( (quarz_pipe_state & ALSA_READY) >> SHIFT_A_R ) {
+            quarz_pipe_state += ALSA_DONE;
+#ifdef PRINT_DEBUG
+            printf("quarz caught SIGCONT, state = %i\n", quarz_pipe_state);
+#endif
+            return ;
+        }
+        if( (quarz_pipe_state & ALSA_DONE) >> SHIFT_A_D ) {
+            quarz_pipe_state += FFT_READY;
+#ifdef PRINT_DEBUG
+            printf("quarz caught SIGCONT, state = %i\n", quarz_pipe_state);
+#endif
+            return ;
+        }
+        if( (quarz_pipe_state & FFT_READY) >> SHIFT_F_R ) {
+            quarz_pipe_state += PIPE_DONE;
+#ifdef PRINT_DEBUG
+            printf("quarz caught SIGCONT, state = %i\n", quarz_pipe_state);
+#endif
+            return ;
+        }
     } else {
        // exit SIG_ERR;
     }
@@ -45,22 +50,22 @@ void quarz_sig_handler( int signum ) {
 
 void alsa_sig_handler( int signum ) {
     if( signum == SIGPIPE ) {
-        alsa_state = READ_PIPE;
+        alsa_state += READ_PIPE;
 #ifdef PRINT_DEBUG
         printf("asla caught SIGPIPE, state = %i\n", alsa_state);
 #endif
     }
     if( signum == SIGCONT ) {
-        if( alsa_state != RUNTIME ) {
-            alsa_state = RUNTIME;
+        if( !( (alsa_state & RUNTIME) >> SHIFT_R ) ) {
+            alsa_state += RUNTIME;
 #ifdef PRINT_DEBUG
             printf("asla caught SIGCONT, state = %i\n", alsa_state);
 #endif
         }
     }
     if( signum == SIGURG ) {
-        if( alsa_state != SIZE_NEEDED ) {
-            alsa_state = SIZE_NEEDED;
+        if( !( (alsa_state & SIZE_NEEDED) >> SHIFT_S_N ) ) {
+            alsa_state += SIZE_NEEDED;
 #ifdef PRINT_DEBUG
             printf("asla caught SIGURG, state = %i\n", alsa_state);
 #endif
@@ -71,46 +76,43 @@ void alsa_sig_handler( int signum ) {
 
 void fft_sig_handler( int signum ) {
     if( signum == SIGPIPE ) {
-        switch (fft_pipe_state) {
-            case ALSA_DONE:
-                fft_pipe_state = READ_PIPE;
+        if( (fft_pipe_state & ALSA_DONE) >> SHIFT_A_D ) {
+            fft_pipe_state += READ_PIPE;
 #ifdef PRINT_DEBUG
-                printf("fft caught SIGPIPE, state = %i\n", fft_pipe_state);
+            printf("fft caught SIGPIPE, state = %i\n", fft_pipe_state);
 #endif
-                break;
-            case SIZE_NEEDED:
-                fft_pipe_state = READ_PIPE;
-#ifdef PRINT_DEBUG
-                printf("fft caught SIGPIPE, state = %i\n", fft_pipe_state);
-#endif
-            case RUNTIME:
-                break;
-            default:
-         //       exit SIG_ERR;
-                break;
+            return ;
         }
-        return;
+        if( (fft_pipe_state & SIZE_NEEDED) >> SHIFT_S_N ) {
+            fft_pipe_state += READ_PIPE;
+#ifdef PRINT_DEBUG
+            printf("fft caught SIGPIPE, state = %i\n", fft_pipe_state);
+#endif
+            return ;
+        }
     }
     if( signum == SIGCONT ) {
-        switch (fft_pipe_state) {
-            case ZERO:
-                fft_pipe_state = ALSA_DONE;
+        if( fft_pipe_state == ZERO ) {
+            fft_pipe_state += ALSA_DONE;
 #ifdef PRINT_DEBUG
-                printf("fft caught SIGCONT, state = %i\n", fft_pipe_state);
+            printf("fft caught SIGCONT, state = %i\n", fft_pipe_state);
 #endif
-                break;
-            default:
-           //     exit SIG_ERR;
-                break;
+            return ;
         }
-        return;
     } 
     if( signum == SIGURG ) {
-        fft_pipe_state = READ_PIPE;
+        fft_pipe_state += READ_PIPE;
 #ifdef PRINT_DEBUG
         printf("fft caught SIGURG, state = %i\n", fft_pipe_state);
 #endif
     } else {
        // exit SIG_ERR;
+    }
+}
+
+void suspend( int *state_variable, int state, int shift ) {
+    printf( "Waiting for %i to change to %i\n", state_variable, state );
+    while( (*state_variable & state) >> shift ) {
+        asm( "nop" );
     }
 }
