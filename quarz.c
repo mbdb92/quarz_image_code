@@ -104,7 +104,13 @@ int main () {
 #ifdef PRINT_DEBUG
             printf("(quarz) %i: send SIGPIPE to %i\n", pids.pid_quarz, pids.pid_alsa);
 #endif
-            //quarz_pipe_state = ALSA_DONE;
+            if ( !((quarz_pipe_state & ALSA_DONE) >> SHIFT_A_D ) ) {
+#ifdef PRINT_DEBUG
+                printf("(quarz) %i: waiting for SIGCONT from alsa!\n", pids.pid_quarz);
+#endif
+                //pause();
+                suspend( &quarz_pipe_state, ALSA_DONE, SHIFT_A_D );
+            }
 
             // To give alsa some time to read the pipe
             // and wait for fft_master
@@ -113,7 +119,7 @@ int main () {
             //if ( quarz_pipe_state != FFT_READY ) {
             if ( !((quarz_pipe_state & FFT_READY) >> SHIFT_F_R ) ) {
 #ifdef PRINT_DEBUG
-                printf("(quarz) %i: waiting for SIGCONT!\n", pids.pid_quarz);
+                printf("(quarz) %i: waiting for SIGCONT from fft!\n", pids.pid_quarz);
 #endif
                 //pause();
                 suspend( &quarz_pipe_state, FFT_READY, SHIFT_F_R );

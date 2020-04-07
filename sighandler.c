@@ -17,7 +17,7 @@ void quarz_sig_handler( int signum ) {
         if( quarz_pipe_state == ZERO ) {
             quarz_pipe_state += ALSA_READY;
 #ifdef PRINT_DEBUG
-            printf("quarz caught SIGCONT, state = %i\n", quarz_pipe_state);
+            printf("(quarz) caught SIGCONT, state = %i\n", quarz_pipe_state);
 #endif
             return ;
         }
@@ -25,21 +25,21 @@ void quarz_sig_handler( int signum ) {
         if( (quarz_pipe_state & ALSA_READY) >> SHIFT_A_R ) {
             quarz_pipe_state += ALSA_DONE;
 #ifdef PRINT_DEBUG
-            printf("quarz caught SIGCONT, state = %i\n", quarz_pipe_state);
+            printf("(quarz) caught SIGCONT, state = %i\n", quarz_pipe_state);
 #endif
             return ;
         }
         if( (quarz_pipe_state & ALSA_DONE) >> SHIFT_A_D ) {
             quarz_pipe_state += FFT_READY;
 #ifdef PRINT_DEBUG
-            printf("quarz caught SIGCONT, state = %i\n", quarz_pipe_state);
+            printf("(quarz) caught SIGCONT, state = %i\n", quarz_pipe_state);
 #endif
             return ;
         }
         if( (quarz_pipe_state & FFT_READY) >> SHIFT_F_R ) {
             quarz_pipe_state += PIPE_DONE;
 #ifdef PRINT_DEBUG
-            printf("quarz caught SIGCONT, state = %i\n", quarz_pipe_state);
+            printf("(quarz) caught SIGCONT, state = %i\n", quarz_pipe_state);
 #endif
             return ;
         }
@@ -52,14 +52,14 @@ void alsa_sig_handler( int signum ) {
     if( signum == SIGPIPE ) {
         alsa_state += READ_PIPE;
 #ifdef PRINT_DEBUG
-        printf("asla caught SIGPIPE, state = %i\n", alsa_state);
+        printf("(alsa) caught SIGPIPE, state = %i\n", alsa_state);
 #endif
     }
     if( signum == SIGCONT ) {
         if( !( (alsa_state & RUNTIME) >> SHIFT_R ) ) {
             alsa_state += RUNTIME;
 #ifdef PRINT_DEBUG
-            printf("asla caught SIGCONT, state = %i\n", alsa_state);
+            printf("(alsa) caught SIGCONT, state = %i\n", alsa_state);
 #endif
         }
     }
@@ -67,7 +67,7 @@ void alsa_sig_handler( int signum ) {
         if( !( (alsa_state & SIZE_NEEDED) >> SHIFT_S_N ) ) {
             alsa_state += SIZE_NEEDED;
 #ifdef PRINT_DEBUG
-            printf("asla caught SIGURG, state = %i\n", alsa_state);
+            printf("(alsa) caught SIGURG, state = %i\n", alsa_state);
 #endif
         }
     }
@@ -79,14 +79,14 @@ void fft_sig_handler( int signum ) {
         if( (fft_pipe_state & ALSA_DONE) >> SHIFT_A_D ) {
             fft_pipe_state += READ_PIPE;
 #ifdef PRINT_DEBUG
-            printf("fft caught SIGPIPE, state = %i\n", fft_pipe_state);
+            printf("(fft) caught SIGPIPE, state = %i\n", fft_pipe_state);
 #endif
             return ;
         }
         if( (fft_pipe_state & SIZE_NEEDED) >> SHIFT_S_N ) {
             fft_pipe_state += READ_PIPE;
 #ifdef PRINT_DEBUG
-            printf("fft caught SIGPIPE, state = %i\n", fft_pipe_state);
+            printf("(fft) caught SIGPIPE, state = %i\n", fft_pipe_state);
 #endif
             return ;
         }
@@ -95,7 +95,7 @@ void fft_sig_handler( int signum ) {
         if( fft_pipe_state == ZERO ) {
             fft_pipe_state += ALSA_DONE;
 #ifdef PRINT_DEBUG
-            printf("fft caught SIGCONT, state = %i\n", fft_pipe_state);
+            printf("(fft) caught SIGCONT, state = %i\n", fft_pipe_state);
 #endif
             return ;
         }
@@ -103,7 +103,7 @@ void fft_sig_handler( int signum ) {
     if( signum == SIGURG ) {
         fft_pipe_state += READ_PIPE;
 #ifdef PRINT_DEBUG
-        printf("fft caught SIGURG, state = %i\n", fft_pipe_state);
+        printf("(fft) caught SIGURG, state = %i\n", fft_pipe_state);
 #endif
     } else {
        // exit SIG_ERR;
@@ -111,8 +111,12 @@ void fft_sig_handler( int signum ) {
 }
 
 void suspend( int *state_variable, int state, int shift ) {
-    printf( "Waiting for %i to change to %i\n", state_variable, state );
-    while( (*state_variable & state) >> shift ) {
+    printf( "Waiting for %i to add %i\n", state_variable, state );
+    printf( "Sleep state: %i\n", !((*state_variable & state) >> shift) ); 
+    // Needs to be inverted, as else it just leaves the while loop
+    // If not, it would be while(0) -> exit
+    while( !((*state_variable & state) >> shift) ) {
         asm( "nop" );
     }
+    printf( "continue, with %i as %i\n", state_variable, *state_variable );
 }

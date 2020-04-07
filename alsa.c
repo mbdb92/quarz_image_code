@@ -203,10 +203,10 @@ int alsa_handler( int pipefd[2] ) {
     //TODO: add error handling for incomplete read
     read( pipefd[0], pids, sizeof(pids) );
     printf("(alsa) %i: pids %i, %i, %i\n", pids->pid_alsa, pids->pid_quarz, pids->pid_alsa, pids->pid_fft_master);
-    // Tell quarz you are done
-    kill( pids->pid_fft_master, SIGCONT );
+    // Tell quarz you are done, not fft!
+    kill( pids->pid_quarz, SIGCONT );
 #ifdef PRINT_DEBUG
-    printf("(alsa) %i: send SIGCONT to %i\n", pids->pid_alsa, pids->pid_fft_master);
+    printf("(alsa) %i: send SIGCONT to %i\n", pids->pid_alsa, pids->pid_quarz);
 #endif
 
     //pause();

@@ -93,7 +93,8 @@ int fft_handler( int pipefd[2] ) {
     pids->pid_quarz = getppid();
     pids->pid_fft_master = getpid();
     // Should the signal from quarz been raised allready just continue
-    printf("(fft) test %i\n", fft_pipe_state);
+    // Not needed with new signal handling model!
+/*
     if( !((fft_pipe_state & ALSA_DONE) >> SHIFT_A_D) ){
 #ifdef PRINT_DEBUG
         printf("(fft) %i: waiting for SIGCONT, alsa not done\n", pids->pid_fft_master);
@@ -101,6 +102,7 @@ int fft_handler( int pipefd[2] ) {
         //pause();
         suspend( &fft_pipe_state, ALSA_DONE, SHIFT_A_D );
     }
+*/
     // Tell quarz your are ready
     kill( pids->pid_quarz, SIGCONT );
 #ifdef PRINT_DEBUG
