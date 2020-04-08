@@ -1,8 +1,7 @@
 CC=clang
 CFLAGS=
 OBJ = quarz.out
-FILE = quarz.c magick.c fft.c alsa.c
-FILE_DEV = quarz.c alsa.c error_n_info.c fft.c sighandler.c
+FILE = quarz.c fft.c alsa.c error_n_info.c sighandler.c
 
 LIBS_STATIC = -static
 LIBS_ALSA = -lasound
@@ -14,13 +13,14 @@ LINK_ALSA = -I/usr/lib
 all: $(FILE)
 	$(CC) $(FILE) -o $(OBJ) $(CFLAGS) $(LIBS_ALSA) $(LIBS_FFT) $(LIBS_MAGICK)
 
-foo: $(FILE_DEV)
-	$(CC) $(FILE_DEV) -o $(OBJ) $(CFLAGS) $(LIBS_STATIC) $(LIBS_ALSA) $(LIBS_FFT) $(LIBS_MAGICK) $(LINK_ALSA) -v -DPRINT_DEBUG
+static: $(FILE)
+	$(CC) $(FILE) -o $(OBJ) $(CFLAGS) $(LIBS_STATIC) $(LIBS_ALSA) $(LIBS_FFT) $(LIBS_MAGICK) $(LINK_ALSA) -v -DPRINT_DEBUG
 
-test: $(FILE_DEV)
-	$(CC) $(FILE_DEV) -o $(OBJ) $(CFLAGS) $(LIBS_ALSA) $(LIBS_FFT) $(LIBS_MAGICK) $(LINK_ALSA) -v -DPRINT_DEBUG
 verbose: $(FILE)
 	$(CC) $(FILE) -o $(OBJ) $(CFLAGS) $(LIBS_ALSA) $(LIBS_FFT) $(LIBS_MAGICK) -v -DPRINT_DEBUG
+
+signals: $(FILE)
+	$(CC) $(FILE) -o $(OBJ) $(CFLAGS) $(LIBS_ALSA) $(LIBS_FFT) $(LIBS_MAGICK) -v -DPRINT_SIGNAL
 
 clean:
 	rm -f *.out *.jpg

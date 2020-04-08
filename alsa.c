@@ -188,7 +188,7 @@ int alsa_handler( int pipefd[2] ) {
     pids->pid_alsa = getpid();
     // Ready to recive signal
     kill( pids->pid_quarz, SIGCONT );
-#ifdef PRINT_DEBUG
+#ifdef PRINT_SIGNAL
     printf("(alsa) %i: send SIGCONT to %i\n", pids->pid_alsa, pids->pid_quarz);
 #endif
     // Wait to get pids, if fft process isn't forked yet i.e.
@@ -205,7 +205,7 @@ int alsa_handler( int pipefd[2] ) {
     printf("(alsa) %i: pids %i, %i, %i\n", pids->pid_alsa, pids->pid_quarz, pids->pid_alsa, pids->pid_fft_master);
     // Tell quarz you are done, not fft!
     kill( pids->pid_quarz, SIGCONT );
-#ifdef PRINT_DEBUG
+#ifdef PRINT_SIGNAL
     printf("(alsa) %i: send SIGCONT to %i\n", pids->pid_alsa, pids->pid_quarz);
 #endif
 
@@ -245,7 +245,7 @@ int alsa_handler( int pipefd[2] ) {
     }
     alsa->size = alsa->frames * 4;
     if( !((alsa_state & SIZE_NEEDED) >> SHIFT_S_N) ) {
-#ifdef PRINT_DEBUG
+#ifdef PRINT_SIGNAL
         printf("(alsa) %i: Waiting for SIGURG!\n", pids->pid_alsa);
 #endif
         //pause();
@@ -254,7 +254,7 @@ int alsa_handler( int pipefd[2] ) {
 
     write( pipefd[1], &alsa->size, sizeof(alsa->size) );
     kill( pids->pid_fft_master, SIGURG );
-#ifdef PRINT_DEBUG
+#ifdef PRINT_SIGNAL
     printf("(alsa) %i: send SIGURG to %i\n", pids->pid_alsa, pids->pid_fft_master);
 #endif
 
@@ -271,7 +271,7 @@ int alsa_handler( int pipefd[2] ) {
 #endif
 
     if( !((alsa_state & RUNTIME) >> SHIFT_R ) ) {
-#ifdef PRINT_DEBUG
+#ifdef PRINT_SIGNAL
         printf("(alsa) %i: Waiting for SIGCONT!\n", pids->pid_alsa);
 #endif
         suspend( &alsa_state, RUNTIME, SHIFT_R );

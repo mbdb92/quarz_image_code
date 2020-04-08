@@ -12,6 +12,7 @@ typedef int bool;
 int alsa_state;
 int quarz_pipe_state;
 int fft_pipe_state;
+int alsa_pid;
 
 struct pid_collection {
     pid_t pid_alsa;

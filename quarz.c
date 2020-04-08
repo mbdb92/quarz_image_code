@@ -17,8 +17,9 @@
 #include "fft.h"
 
 //Signal Handler Definition
-void quarz_sig_handler( int signum );
+//void quarz_sig_handler( int signum );
 //int quarz_pipe_state;
+struct sigaction quarz_act;
 
 int main () {
     int pipefd[2];
@@ -31,18 +32,29 @@ int main () {
     // Used for transfer of pid to childs later
     quarz_pipe_state = ZERO;
 
+    // Code for sigaction
+    // Replacex signal code
+    memset( &quarz_act, 0, sizeof(quarz_act) );
+
+    quarz_act.sa_sigaction = quarz_sig_handler;
+    quarz_act.sa_flags = SA_SIGINFO;
+
+    sigaction( SIGPIPE, &quarz_act, 0 );
+    sigaction( SIGCONT, &quarz_act, 0 );
     /*
      * Setting up the sighandler for the two used signals by its child
      * SIGCONT to show it's ready to recieve
      * SIGPIPE is currently not needed
      * TODO remove SIGPIPE if unused in the end
-     */
+     * TODO Remove legacy codeblock
+     
     sig_handler_return = signal( SIGPIPE, quarz_sig_handler );
     if( sig_handler_return == SIG_ERR )
         return E_SIGH_QUARZ;
     sig_handler_return = signal( SIGCONT, quarz_sig_handler );
     if( sig_handler_return == SIG_ERR )
         return E_SIGH_QUARZ;
+    */
 
     // Setup of the pipe
     return_value = pipe(pipefd);
@@ -60,7 +72,7 @@ int main () {
         return E_FORK;
     // quarz continues here
     } else {
-
+        alsa_pid = pids.pid_alsa;
         // Fork for fft handler
         pids.pid_fft_master = fork();
         if( pids.pid_fft_master == OK ) {
@@ -92,8 +104,8 @@ int main () {
             printf("(quarz) %i: state check: %i\n", pids.pid_quarz, ((quarz_pipe_state & ALSA_READY) >> SHIFT_A_R) );
 #endif
             if( !((quarz_pipe_state & ALSA_READY) >> SHIFT_A_R) ) {
-#ifdef PRINT_DEBUG
-                printf("(quarz) %i: waiting for SIGCONT!\n", pids.pid_quarz);
+#ifdef PRINT_SIGNAL
+                printf("(quarz) %i: waiting for SIGCONT from alsa!\n", pids.pid_quarz);
 #endif
                 //pause();
                 suspend( &quarz_pipe_state, ALSA_READY, SHIFT_A_R );
@@ -101,11 +113,11 @@ int main () {
             write( pipefd[1], &pids, sizeof(pids) );
             // Tells alsa to read the pipe
             kill( pids.pid_alsa, SIGPIPE);
-#ifdef PRINT_DEBUG
+#ifdef PRINT_SIGNAL
             printf("(quarz) %i: send SIGPIPE to %i\n", pids.pid_quarz, pids.pid_alsa);
 #endif
             if ( !((quarz_pipe_state & ALSA_DONE) >> SHIFT_A_D ) ) {
-#ifdef PRINT_DEBUG
+#ifdef PRINT_SIGNAL
                 printf("(quarz) %i: waiting for SIGCONT from alsa!\n", pids.pid_quarz);
 #endif
                 //pause();
@@ -118,13 +130,16 @@ int main () {
             // Waits for fft to be ready
             //if ( quarz_pipe_state != FFT_READY ) {
             if ( !((quarz_pipe_state & FFT_READY) >> SHIFT_F_R ) ) {
-#ifdef PRINT_DEBUG
+#ifdef PRINT_SIGNAL
                 printf("(quarz) %i: waiting for SIGCONT from fft!\n", pids.pid_quarz);
 #endif
                 //pause();
                 suspend( &quarz_pipe_state, FFT_READY, SHIFT_F_R );
             }
             
+            // Tells fft that alsa is done
+            kill( pids.pid_fft_master, SIGCONT);
+            /*
             char nlc = "\n";
             write( pipefd[1], &nlc, sizeof(nlc) );
             //while (temp_buffer != "\n") {
@@ -137,20 +152,21 @@ int main () {
 #ifdef PRINT_DEBUG
             printf("(quarz) %i: left loop, file should be clear\n", pids.pid_quarz);
 #endif
+            */
             write( pipefd[1], &pids, sizeof(pids) );
             // Tells fft to read pipe
             kill( pids.pid_fft_master, SIGPIPE);
-#ifdef PRINT_DEBUG
+#ifdef PRINT_SIGNAL
             printf("(quarz) %i: send SIGPIPE to %i\n", pids.pid_quarz, pids.pid_fft_master);
 #endif
 
             // For fft to wrap up
-#ifdef PRINT_DEBUG
+#ifdef PRINT_SIGNAL
                 printf("(quarz) %i: waiting for SIGCONT!\n", pids.pid_quarz);
 #endif
             pause();
             
-#ifdef PRINT_DEBUG
+#ifdef PRINT_SIGNAL
             printf("(quarz) %i setup done\n", pids.pid_quarz);
 #endif
         /*

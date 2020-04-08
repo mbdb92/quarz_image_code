@@ -105,11 +105,11 @@ int fft_handler( int pipefd[2] ) {
 */
     // Tell quarz your are ready
     kill( pids->pid_quarz, SIGCONT );
-#ifdef PRINT_DEBUG
+#ifdef PRINT_SIGNAL
     printf("(fft) %i: send SIGCONT to %i\n", pids->pid_fft_master, pids->pid_quarz);
 #endif
     if( !((fft_pipe_state & READ_PIPE) >> SHIFT_R_P) ) {
-#ifdef PRINT_DEBUG
+#ifdef PRINT_SIGNAL
         printf("(fft) %i: waiting for SIGPIPE to read pids\n", pids->pid_fft_master);
 #endif
         //pause();
@@ -132,17 +132,17 @@ int fft_handler( int pipefd[2] ) {
     fft_pipe_state = fft_pipe_state - READ_PIPE;
     // Tell quarz you are done
     kill( pids->pid_quarz, SIGCONT );
-#ifdef PRINT_DEBUG
+#ifdef PRINT_SIGNAL
     printf("(fft) %i: send SIGCONT to %i\n", pids->pid_fft_master, pids->pid_quarz);
 #endif
 
     fft_pipe_state = SIZE_NEEDED;
     kill( pids->pid_alsa, SIGURG );
-#ifdef PRINT_DEBUG
+#ifdef PRINT_SIGNAL
     printf("(fft) %i: send SIGURG to %i\n", pids->pid_fft_master, pids->pid_alsa);
 #endif
     if( !((fft_pipe_state & READ_PIPE) >> SHIFT_R_P) ) {
-#ifdef PRINT_DEBUG
+#ifdef PRINT_SIGNAL
         printf("(fft) %i: waiting for SIGPIPE to get size\n", pids->pid_fft_master);
 #endif
         //pause();
@@ -160,7 +160,7 @@ int fft_handler( int pipefd[2] ) {
 
     fft_pipe_state = RUNTIME;
     kill( pids->pid_alsa, SIGCONT );
-#ifdef PRINT_DEBUG
+#ifdef PRINT_SIGNAL
     printf("(fft) %i: send SIGCONT to %i\n", pids->pid_fft_master, pids->pid_alsa);
 #endif
     /*
