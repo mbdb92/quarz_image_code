@@ -17,9 +17,7 @@
 
 #include "fft.h"
 
-void fft_sig_handler( int signum );
-//int fft_pipe_state;
-
+struct sigaction fft_act;
 /*
  * This Function sets up the needed structs
  */
@@ -48,7 +46,7 @@ int destroy_fft( struct fft_params *fft_p, struct fft_data *fft_d ) {
 }
 
 
-int fft_handler( int pipefd[2] ) {
+int fft_handler( int pipefd[2], void *shmem ) {
     struct pid_collection *pids;
     struct fft_params *fft_p;
     struct fft_data *fft_d;
@@ -65,17 +63,13 @@ int fft_handler( int pipefd[2] ) {
      */
     fft_pipe_state = ZERO;
 
-    sig_handler_return = signal( SIGPIPE, fft_sig_handler );
-    if( sig_handler_return == SIG_ERR )
-        return 1;
+    memset( &fft_act, 0, sizeof(fft_act) );
 
-    sig_handler_return = signal( SIGCONT, fft_sig_handler );
-    if( sig_handler_return == SIG_ERR )
-        return 1;
+    fft_act.sa_sigaction = fft_sig_handler;
+    fft_act.sa_flags = SA_SIGINFO;
 
-    sig_handler_return = signal( SIGURG, fft_sig_handler );
-    if( sig_handler_return == SIG_ERR )
-        return 1;
+    sigaction( SIGUSR1, &fft_act, 0 );
+    sigaction( SIGCONT, &fft_act, 0 );
 
     /* 
      * The needed structs
@@ -87,69 +81,24 @@ int fft_handler( int pipefd[2] ) {
 
     /*
      * Get pid of parrent to be ready to complet init step
-     * The wait for the signals to read the pipe
-     * once done, return signal to quarz that everything is done
+     * The wait for the signals to read the shared memory
+     * once done, send signal to alsa to run main loop
      */
-    pids->pid_quarz = getppid();
-    pids->pid_fft_master = getpid();
-    // Should the signal from quarz been raised allready just continue
-    // Not needed with new signal handling model!
-/*
-    if( !((fft_pipe_state & ALSA_DONE) >> SHIFT_A_D) ){
+
+    kill( getppid(), SIGUSR2 );
+
+    if( !((fft_pipe_state & SHMEM_READ) >> SHIFT_S_R) ) {
+#ifdef PRINT_SIGNAL
+        printf("(fft) %i: waiting for SIGUSR1 to get size\n", pids->pid_fft_master);
+#endif
+        suspend( &fft_pipe_state, SHMEM_READ, SHIFT_S_R );
+    }
+    memcpy( pids, shmem, sizeof(pids) );
+    memcpy( &fft_p->size, &shmem[ sizeof(pids) ], sizeof(fft_p->size) );
+
 #ifdef PRINT_DEBUG
-        printf("(fft) %i: waiting for SIGCONT, alsa not done\n", pids->pid_fft_master);
+    printf("(fft) %i: read from shmem: %i, %i, %i, %i \n", pids->pid_fft_master, pids->pid_quarz, pids->pid_alsa, pids->pid_fft_master, fft_p->size);
 #endif
-        //pause();
-        suspend( &fft_pipe_state, ALSA_DONE, SHIFT_A_D );
-    }
-*/
-    // Tell quarz your are ready
-    kill( pids->pid_quarz, SIGCONT );
-#ifdef PRINT_SIGNAL
-    printf("(fft) %i: send SIGCONT to %i\n", pids->pid_fft_master, pids->pid_quarz);
-#endif
-    if( !((fft_pipe_state & READ_PIPE) >> SHIFT_R_P) ) {
-#ifdef PRINT_SIGNAL
-        printf("(fft) %i: waiting for SIGPIPE to read pids\n", pids->pid_fft_master);
-#endif
-        //pause();
-        suspend( &fft_pipe_state, READ_PIPE, SHIFT_R_P );
-    }
-    // IF this doesn't happen, the state won't be reseted! This is a problem later on
-    // It changes here, as it should change as soon as possible if another signal gets
-    // raised in the meantime
-    fft_pipe_state = fft_pipe_state - READ_PIPE;
-    // TODO: Add error handling for incomplete read
-    retval = read( pipefd[0], pids, sizeof(pids) );
-    if( retval < 0 ) {
-        return ERR;
-    }
-    if( retval != sizeof(pids) ) {
-        printf("(fft) %i: short read!\n", pids->pid_fft_master);
-    }
-    printf("(fft) %i: pids %i, %i, %i\n", pids->pid_fft_master, pids->pid_quarz, pids->pid_alsa, pids->pid_fft_master);
-    // IF this doesn't happen, the state won't be reseted! This is a problem later on
-    fft_pipe_state = fft_pipe_state - READ_PIPE;
-    // Tell quarz you are done
-    kill( pids->pid_quarz, SIGCONT );
-#ifdef PRINT_SIGNAL
-    printf("(fft) %i: send SIGCONT to %i\n", pids->pid_fft_master, pids->pid_quarz);
-#endif
-
-    fft_pipe_state = SIZE_NEEDED;
-    kill( pids->pid_alsa, SIGURG );
-#ifdef PRINT_SIGNAL
-    printf("(fft) %i: send SIGURG to %i\n", pids->pid_fft_master, pids->pid_alsa);
-#endif
-    if( !((fft_pipe_state & READ_PIPE) >> SHIFT_R_P) ) {
-#ifdef PRINT_SIGNAL
-        printf("(fft) %i: waiting for SIGPIPE to get size\n", pids->pid_fft_master);
-#endif
-        //pause();
-        suspend( &fft_pipe_state, READ_PIPE, SHIFT_R_P );
-    }
-    read( pipefd[0], &fft_p->size, sizeof(fft_p->size) );
-
     /*
      * This is currently needed, as using the fft_d->fft_in array doesn't work
      * TODO: Fix error
@@ -158,17 +107,31 @@ int fft_handler( int pipefd[2] ) {
 
     fft_p->plan = fftw_plan_r2r_1d(fft_p->size, in, fft_d->fft_out, FFTW_DHT, FFTW_ESTIMATE);
 
-    fft_pipe_state = RUNTIME;
-    kill( pids->pid_alsa, SIGCONT );
-#ifdef PRINT_SIGNAL
-    printf("(fft) %i: send SIGCONT to %i\n", pids->pid_fft_master, pids->pid_alsa);
-#endif
+    fft_pipe_state += RUNTIME;
     /*
-    for( int i = 0; i < fft_p->size; i++ ) {
-        in[i] = (double) buffer[i];
+     * Send SIGCONT to alsa, to start RUNTIME
+     */
+#ifdef PRINT_SIGNAL
+    printf("(fft) %i: Send SIGCONT to (alsa) %i\n", pids->pid_fft_master, pids->pid_alsa);
+#endif
+    kill( pids->pid_alsa, SIGCONT );
+
+    if( !((fft_pipe_state & ALSA_DONE) >> SHIFT_A_D) ) {
+#ifdef PRINT_SIGNAL
+        printf("(fft) %i: waiting for SIGCONT to read input\n", pids->pid_fft_master);
+#endif
+        suspend( &fft_pipe_state, ALSA_DONE, SHIFT_A_D );
     }
-    */
-    read( pipefd[0], in, sizeof( in ) );
+    read( pipefd[0], in, sizeof(in) );
+/*
+    for( int i = 0; i < fft_p->size; i++ ) {
+    //    in[i] = (double) buffer[i];
+        read( pipefd[0], &in[i], sizeof(long) );
+#ifdef PRINT_DEBUG
+        printf("(fft) %i: read long from pipe: %li\n", pids->fft_master_pid, (long) in[i]);
+#endif
+    }
+*/
 
 //    free(buffer);
 //    retval = fill_input_struct( fft_p, fft_d, in );

@@ -2,7 +2,9 @@
 #include <sys/wait.h>
 // For signals
 #include <signal.h>
-// For pipe, signals, wait
+// For shared memory#
+#include <sys/mman.h>
+// For pipe, signals, wait, mmam
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -16,9 +18,6 @@
 #include "alsa.h"
 #include "fft.h"
 
-//Signal Handler Definition
-//void quarz_sig_handler( int signum );
-//int quarz_pipe_state;
 struct sigaction quarz_act;
 
 int main () {
@@ -27,58 +26,52 @@ int main () {
     struct pid_collection pids;
     // To check if signalhandler is set correctly
     void (*sig_handler_return) (int);
+    void *shmem;
+    int protection, visibility;
     char temp_buffer;
     
     // Used for transfer of pid to childs later
-    quarz_pipe_state = ZERO;
+    quarz_state = ZERO;
 
-    // Code for sigaction
-    // Replacex signal code
     memset( &quarz_act, 0, sizeof(quarz_act) );
 
     quarz_act.sa_sigaction = quarz_sig_handler;
     quarz_act.sa_flags = SA_SIGINFO;
 
-    sigaction( SIGPIPE, &quarz_act, 0 );
-    sigaction( SIGCONT, &quarz_act, 0 );
-    /*
-     * Setting up the sighandler for the two used signals by its child
-     * SIGCONT to show it's ready to recieve
-     * SIGPIPE is currently not needed
-     * TODO remove SIGPIPE if unused in the end
-     * TODO Remove legacy codeblock
-     
-    sig_handler_return = signal( SIGPIPE, quarz_sig_handler );
-    if( sig_handler_return == SIG_ERR )
-        return E_SIGH_QUARZ;
-    sig_handler_return = signal( SIGCONT, quarz_sig_handler );
-    if( sig_handler_return == SIG_ERR )
-        return E_SIGH_QUARZ;
-    */
+    sigaction( SIGUSR1, &quarz_act, 0 );
+    sigaction( SIGUSR2, &quarz_act, 0 );
 
     // Setup of the pipe
     return_value = pipe(pipefd);
     if( return_value != OK )
         return E_PIPE;
 
+    // Setup for shared mamory
+    protection = PROT_READ | PROT_WRITE;
+    visibility = MAP_SHARED | MAP_ANONYMOUS;
+
+    /*
+     * The sizeof(int) is needed to transfer the size
+     */
+    shmem = mmap( NULL, (sizeof(pids) + sizeof(int)), protection, visibility, -1, 0 );
+
     // Forking for alsa
     pids.pid_alsa = fork();
     if( pids.pid_alsa == OK ) {
         int rc;
 
-        rc = alsa_handler( pipefd );
+        rc = alsa_handler( pipefd, shmem );
 
     } else if( pids.pid_alsa == -1 ) {
         return E_FORK;
     // quarz continues here
     } else {
-        alsa_pid = pids.pid_alsa;
         // Fork for fft handler
         pids.pid_fft_master = fork();
         if( pids.pid_fft_master == OK ) {
             int rc;
 
-            rc = fft_handler( pipefd );
+            rc = fft_handler( pipefd, shmem );
 
         } else if( pids.pid_fft_master == -1 ){
             return E_FORK;
@@ -94,80 +87,22 @@ int main () {
              */
             // For ALSA
             pids.pid_quarz = getpid();
+#ifdef PRINT_DEBUG
             printf("PIDS:\n");
             printf("quarz: %i, alsa: %i, fft: %i\n", pids.pid_quarz, pids.pid_alsa, pids.pid_fft_master);
             printf("State Adresses:\n");
-            printf("quarz: %i, alsa: %i, fft: %i\n", &quarz_pipe_state, &alsa_state, &fft_pipe_state);
-            // If alsa hasn't raised the continue signal
-            //if( quarz_pipe_state != ALSA_READY ) {
-#ifdef PRINT_DEBUG
-            printf("(quarz) %i: state check: %i\n", pids.pid_quarz, ((quarz_pipe_state & ALSA_READY) >> SHIFT_A_R) );
+            printf("quarz: %i, alsa: %i, fft: %i\n", &quarz_state, &alsa_state, &fft_pipe_state);
 #endif
-            if( !((quarz_pipe_state & ALSA_READY) >> SHIFT_A_R) ) {
-#ifdef PRINT_SIGNAL
-                printf("(quarz) %i: waiting for SIGCONT from alsa!\n", pids.pid_quarz);
-#endif
-                //pause();
-                suspend( &quarz_pipe_state, ALSA_READY, SHIFT_A_R );
-            }
-            write( pipefd[1], &pids, sizeof(pids) );
-            // Tells alsa to read the pipe
-            kill( pids.pid_alsa, SIGPIPE);
-#ifdef PRINT_SIGNAL
-            printf("(quarz) %i: send SIGPIPE to %i\n", pids.pid_quarz, pids.pid_alsa);
-#endif
-            if ( !((quarz_pipe_state & ALSA_DONE) >> SHIFT_A_D ) ) {
-#ifdef PRINT_SIGNAL
-                printf("(quarz) %i: waiting for SIGCONT from alsa!\n", pids.pid_quarz);
-#endif
-                //pause();
-                suspend( &quarz_pipe_state, ALSA_DONE, SHIFT_A_D );
-            }
-
-            // To give alsa some time to read the pipe
-            // and wait for fft_master
-
-            // Waits for fft to be ready
-            //if ( quarz_pipe_state != FFT_READY ) {
-            if ( !((quarz_pipe_state & FFT_READY) >> SHIFT_F_R ) ) {
-#ifdef PRINT_SIGNAL
-                printf("(quarz) %i: waiting for SIGCONT from fft!\n", pids.pid_quarz);
-#endif
-                //pause();
-                suspend( &quarz_pipe_state, FFT_READY, SHIFT_F_R );
-            }
             
-            // Tells fft that alsa is done
-            kill( pids.pid_fft_master, SIGCONT);
-            /*
-            char nlc = "\n";
-            write( pipefd[1], &nlc, sizeof(nlc) );
-            //while (temp_buffer != "\n") {
-            while ( strcmp (&temp_buffer, &nlc) ) {
-                return_value = read( pipefd[0], &temp_buffer, sizeof(char) );
-#ifdef PRINT_DEBUG
-                printf("(quarz) %i: read char %c from pipe with return_value: %i\n", pids.pid_quarz, temp_buffer,  return_value);
-#endif
-            } ;
-#ifdef PRINT_DEBUG
-            printf("(quarz) %i: left loop, file should be clear\n", pids.pid_quarz);
-#endif
-            */
-            write( pipefd[1], &pids, sizeof(pids) );
-            // Tells fft to read pipe
-            kill( pids.pid_fft_master, SIGPIPE);
-#ifdef PRINT_SIGNAL
-            printf("(quarz) %i: send SIGPIPE to %i\n", pids.pid_quarz, pids.pid_fft_master);
-#endif
+            memcpy( shmem, &pids, sizeof(pids) );
 
-            // For fft to wrap up
+            while( !(((quarz_state & FFT_READY) >> SHIFT_F_R) && (quarz_state & ALSA_READY) >> SHIFT_A_R ) ) {
+                asm( "nop" );
+            }
+
+            kill( pids.pid_alsa, SIGUSR1 );
 #ifdef PRINT_SIGNAL
-                printf("(quarz) %i: waiting for SIGCONT!\n", pids.pid_quarz);
-#endif
-            pause();
-            
-#ifdef PRINT_SIGNAL
-            printf("(quarz) %i setup done\n", pids.pid_quarz);
+            printf("(quarz) %i send SIGUSR1 to (alsa) %i\n", pids.pid_quarz, pids.pid_alsa);
 #endif
         /*
          * This part war staken from "man 3 wait"

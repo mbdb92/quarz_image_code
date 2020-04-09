@@ -10,9 +10,8 @@ typedef int bool;
 #define false 0
 
 int alsa_state;
-int quarz_pipe_state;
+int quarz_state;
 int fft_pipe_state;
-int alsa_pid;
 
 struct pid_collection {
     pid_t pid_alsa;
