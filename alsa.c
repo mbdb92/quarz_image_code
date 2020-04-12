@@ -117,15 +117,26 @@ int record_to_buffer( long *buffer, struct alsa_params alsa ) {
     handle = alsa.handle;
     params = alsa.params;
     frames = alsa.frames;
+#ifdef PRINT_DEBUG
+    printf("(alsa): handle %i, params %i, frames %i\n", handle, params, frames );
+#endif
 
     printf("In record to buffer\n");
     unsigned int val = 0;
     snd_pcm_hw_params_get_period_time(params, &val, &dir);
     snd_pcm_hw_params_get_rate(params, &val, &dir);
 
+#ifdef BREAKPOINTS
+    raise(SIGUSR2);
+#endif
     snd_pcm_hw_params_free(params);
 
+    printf("before read\n");
+#ifdef BREAKPOINTS
+    sleep(60);
+#endif
     rc = snd_pcm_readi(handle, buffer, frames);
+    printf("after read\n");
 
     if (rc == -EPIPE) {
         fprintf(stderr, "overrun occured\n");
@@ -270,11 +281,16 @@ int alsa_handler( int pipefd[2], void *shmem ) {
 #ifdef PRINT_DEBUG
         printf("(alsa) %i: Top of loop\n", pids->pid_alsa);
 #endif
+#ifdef PRINT_DEBUG
+        printf("(alsa): handle %i, params %i, frames %i\n", alsa->handle, alsa->params, alsa->frames );
+#endif
+#ifdef BREAKPOINTS
+        raise(SIGUSR2);
+#endif
         rc = record_to_buffer( buffer, *alsa );
         if( rc != OK ){
             return 1;
         }
-        printf("record to buffer done\n");
 
         write( pipefd[1], &buffer, sizeof(buffer) );
 #ifdef PRINT_SIGNAL
