@@ -79,6 +79,7 @@ int fft_handler( int pipefd[2], void *shmem ) {
     fft_d = malloc( sizeof(struct fft_data) );
     //plan = fftw_plan_dft_1d(fft_p->size, fft_d->fft_in, fft_d->fft_out, FFTW_FORWARD, FFTW_ESTIMATE);
 
+    close( pipefd[1] );
     /*
      * Get pid of parrent to be ready to complet init step
      * The wait for the signals to read the shared memory
@@ -123,20 +124,7 @@ int fft_handler( int pipefd[2], void *shmem ) {
         suspend( &fft_pipe_state, ALSA_DONE, SHIFT_A_D );
     }
 
-    char read_char;
-    bool run_read = true;
-    int i = 0;
-    while( run_read == true ){
-        read( pipefd[0], &read_char, sizeof(read_char) );
-        if( read_char != "\n" ) {
-            in[i] = (double) read_char;
-            i++;
-            printf("%c\n", read_char);
-        } else {
-            run_read = false;
-        }
-    }
-    //read( pipefd[0], in, sizeof( fft_p->size * sizeof(fftw_complex)) );
+    read( pipefd[0], in, (fft_p->size / 2) );
 /*
     for( int i = 0; i < fft_p->size; i++ ) {
     //    in[i] = (double) buffer[i];

@@ -194,6 +194,7 @@ int record_to_buffer( long *buffer, struct alsa_params *alsa ) {
 
     snd_pcm_hw_params_free(alsa->params);
 
+    /*
     loops = 1;
     while (loops > 0) {
         loops--;
@@ -212,26 +213,47 @@ int record_to_buffer( long *buffer, struct alsa_params *alsa ) {
 #endif
         }
     }
+    */
 
-    snd_pcm_drain(alsa->handle);
-    snd_pcm_close(alsa->handle);
 //:    free(buffer);
 //    printf("%i\n", size);
+//    snd_pcm_drain(alsa->handle);
+//    snd_pcm_close(alsa->handle);
     return size;
+}
+
+int run_loop ( int loops, long *buffer, struct alsa_params *alsa ) {
+    int rc;
+
+    while (loops > 0) {
+        loops--;
+        rc = snd_pcm_readi(alsa->handle, buffer, alsa->frames);
+
+        if (rc == -EPIPE) {
+            fprintf(stderr, "overrun occured\n");
+            snd_pcm_prepare(alsa->handle);
+        }else if (rc < 0) {
+            fprintf(stderr, "error from read: %s\n", snd_strerror(rc));
+        }else if (rc != (int)alsa->frames) {
+            fprintf(stderr, "short read, read %d frames\n", rc);
+        } else {
+#ifdef PRINT_DEBUG
+            printf("Frames read: %i\n", rc);
+#endif
+        }
+    }
 }
 
 int alsa_handler( int pipefd[2], void *shmem ) {
     struct pid_collection *pids;
     struct alsa_params *alsa;
-    int rc, dir;
+    int rc, dir, loops;
     void (*sigHandlerReturn)(int);
     long *buffer;
-    bool loop;
 
     alsa_state = ZERO;
     pids = malloc( sizeof(struct pid_collection) );
     alsa = malloc( sizeof(struct alsa_params) );
-    loop = true;
 
     // alsa_act is global defined!
     // The struct containes the needed informations
@@ -242,6 +264,8 @@ int alsa_handler( int pipefd[2], void *shmem ) {
 
     sigaction( SIGUSR1, &alsa_act, 0 );
     sigaction( SIGCONT, &alsa_act, 0 );
+
+    close( pipefd[0] );
 
     kill (getppid(), SIGUSR1 );
 #ifdef PRINT_DEBUG
@@ -278,10 +302,10 @@ int alsa_handler( int pipefd[2], void *shmem ) {
      * Main RUNTIME Loop!
      */
 
-    char terminal = "\n";
-    rc = write( pipefd[1], &buffer, sizeof(buffer) );
+    loops = 1;
+    run_loop( loops, buffer, alsa );
+    rc = write( pipefd[1], &buffer, alsa->size );
     printf("(alsa) %i: wrote %i to pipe\n", pids->pid_alsa, rc);
-    write( pipefd[1], &terminal, sizeof(terminal) );
 #ifdef PRINT_SIGNAL
     printf("(alsa) %i: Send SIGCONT to (fft) %i\n", pids->pid_alsa, pids->pid_fft_master);
 #endif
@@ -291,6 +315,8 @@ int alsa_handler( int pipefd[2], void *shmem ) {
      * Cleanup code
      */
    // rc = close_device( alsa );
+    snd_pcm_drain(alsa->handle);
+    snd_pcm_close(alsa->handle);
     free(alsa->buffer);
     free(alsa);
     free(pids);
