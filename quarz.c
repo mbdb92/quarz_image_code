@@ -94,7 +94,7 @@ int main () {
             printf("quarz: %i, alsa: %i, fft: %i\n", &quarz_state, &alsa_state, &fft_pipe_state);
 #endif
             
-            memcpy( shmem, &pids, sizeof(pids) );
+            memcpy( shmem, &pids, sizeof(struct pid_collection) );
 
             while( !(((quarz_state & FFT_READY) >> SHIFT_F_R) && (quarz_state & ALSA_READY) >> SHIFT_A_R ) ) {
                 asm( "nop" );

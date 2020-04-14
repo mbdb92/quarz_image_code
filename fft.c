@@ -93,8 +93,8 @@ int fft_handler( int pipefd[2], void *shmem ) {
 #endif
         suspend( &fft_pipe_state, SHMEM_READ, SHIFT_S_R );
     }
-    memcpy( pids, shmem, sizeof(pids) );
-    memcpy( &fft_p->size, &shmem[ sizeof(pids) ], sizeof(fft_p->size) );
+    memcpy( pids, shmem, sizeof(struct pid_collection) );
+    memcpy( &fft_p->size, &shmem[ sizeof(struct pid_collection) ], sizeof(fft_p->size) );
 
 #ifdef PRINT_DEBUG
     printf("(fft) %i: read from shmem: %i, %i, %i, %i \n", pids->pid_fft_master, pids->pid_quarz, pids->pid_alsa, pids->pid_fft_master, fft_p->size);
@@ -122,7 +122,21 @@ int fft_handler( int pipefd[2], void *shmem ) {
 #endif
         suspend( &fft_pipe_state, ALSA_DONE, SHIFT_A_D );
     }
-    read( pipefd[0], in, sizeof(in) );
+
+    char read_char;
+    bool run_read = true;
+    int i = 0;
+    while( run_read == true ){
+        read( pipefd[0], &read_char, sizeof(read_char) );
+        if( read_char != "\n" ) {
+            in[i] = (double) read_char;
+            i++;
+            printf("%c\n", read_char);
+        } else {
+            run_read = false;
+        }
+    }
+    //read( pipefd[0], in, sizeof( fft_p->size * sizeof(fftw_complex)) );
 /*
     for( int i = 0; i < fft_p->size; i++ ) {
     //    in[i] = (double) buffer[i];

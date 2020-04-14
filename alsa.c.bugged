@@ -1,12 +1,3 @@
-/*
-#include "alsa.h"
-#include <alsa/asoundlib.h>
-// for file access
-#include <stdio.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include "type.h"
-*/
 #include "alsa.h"
 #include <alsa/asoundlib.h>
 // For signals
@@ -37,6 +28,7 @@ struct sigaction alsa_act;
  * TODO: Resolving error with this function and removing this comment
  * TODO: Change so SND_PCM_ACCESS can be changed
  */
+
 int setup_pcm_struct( snd_pcm_t *handle, snd_pcm_hw_params_t *params ) {
     int rc, dir;
     unsigned int rate = RATE;
@@ -103,44 +95,129 @@ snd_pcm_t * open_device( const char *name, snd_pcm_stream_t stream, int mode ) {
     if (rc < 0) {
 //        print_error_code( PCM_OPEN_FAIL );
     }
+#ifdef DEBUG
+    Handle = handle;
+#endif
     return handle;
+}
+
+int close_device( struct alsa_params *alsa ) {
+    snd_pcm_drain(alsa->handle);
+    snd_pcm_close(alsa->handle);
+
+    return OK;
+}
+
+int record_to_buffer( long *buffer, struct alsa_params alsa ) {
+    long loops;
+    int rc, dir, size;
+    snd_pcm_t *handle;
+    snd_pcm_hw_params_t *params;
+    snd_pcm_uframes_t frames;
+    handle = alsa.handle;
+    params = alsa.params;
+    frames = alsa.frames;
+#ifdef PRINT_DEBUG
+    printf("(alsa): handle %i, params %i, frames %i\n", handle, params, frames );
+#endif
+
+    printf("In record to buffer\n");
+    unsigned int val = 0;
+    snd_pcm_hw_params_get_period_time(params, &val, &dir);
+    snd_pcm_hw_params_get_rate(params, &val, &dir);
+
+#ifdef BREAKPOINTS
+    raise(SIGUSR2);
+#endif
+    snd_pcm_hw_params_free(params);
+
+    printf("before read\n");
+#ifdef BREAKPOINTS
+    sleep(60);
+#endif
+    rc = snd_pcm_readi(handle, buffer, frames);
+    printf("after read\n");
+
+    if (rc == -EPIPE) {
+        fprintf(stderr, "overrun occured\n");
+        snd_pcm_prepare(handle);
+    }else if (rc < 0) {
+        fprintf(stderr, "error from read: %s\n", snd_strerror(rc));
+    }else if (rc != (int)frames) {
+        fprintf(stderr, "short read, read %d frames\n", rc);
+    } else {
+#ifdef PRINT_DEBUG
+        printf("Frames read: %i\n", rc);
+#endif
+    }
+
+    return OK;
 }
 
 
 
-int record_to_buffer( long *buffer, struct alsa_params *alsa ) {
-    long loops;
-    int rc, dir, size;
-    snd_pcm_t *handle;
-//    snd_pcm_hw_params_t *params;
-//    snd_pcm_uframes_t frames;
-//    handle = alsa.handle;
-//    params = alsa.params;
-//    frames = alsa.frames;
-//    static double *buffer;
 
+int alsa_handler( int pipefd[2], void *shmem ) {
+    struct pid_collection *pids;
+    struct alsa_params *alsa;
+    int rc, dir;
+    void (*sigHandlerReturn)(int);
+    // For runtime
+    long *buffer;
+    bool loop;
+
+    // For Signal Handler status
+    alsa_state = ZERO;
+    pids = malloc( sizeof(struct pid_collection) );
+    alsa = malloc( sizeof(struct alsa_params) );
+    loop = true;
+    
+    /*
+     * Using sigaction instead of signal()
+     * signal would also work, but more information from
+     * sigaction can be usefull
+     *
+     * SIGUSR1 comes from quarz, once shmem is completed
+     * SIGCONT comes from fft_master once the pipe is ready
+     */
+    memset( &alsa_act, 0, sizeof(alsa_act) );
+
+    alsa_act.sa_sigaction = alsa_sig_handler;
+    alsa_act.sa_flags = SA_SIGINFO;
+
+    sigaction( SIGUSR1, &alsa_act, 0 );
+    sigaction( SIGCONT, &alsa_act, 0 );
+
+    kill( getppid(), SIGUSR1 );
+
+    // Wait to get pids, if fft process isn't forked yet i.e.
+    if( !((alsa_state & SHMEM_READ) >> SHIFT_S_R ) ) {
+#ifdef PRINT_DEBUG
+        printf("(alsa) %i: Waiting for SIGUSR1!\n", pids->pid_alsa);
+#endif
+        suspend( &alsa_state, SHMEM_READ, SHIFT_S_R );
+    }
+
+    memcpy( pids, shmem, sizeof(pids) );
+#ifdef PRINT_DEBUG
+    printf("(fft) %i: read from shmem: %i, %i, %i\n", pids->pid_fft_master, pids->pid_quarz, pids->pid_alsa, pids->pid_fft_master);
+#endif
 
     /*
      * This block takes care of the device initialisation
      */
-    handle = open_device( DEVICE, SND_PCM_STREAM_CAPTURE, 0 );
+    alsa->handle = open_device( DEVICE, SND_PCM_STREAM_CAPTURE, 0 );
     if (rc < 0) {
         print_error_code( PCM_OPEN_FAIL );
     }
-#ifdef VERBOSE
-    check_state( alsa->handle );
-#endif
-    alsa->handle = handle;
     // alloca hat keinen returnvalue da es ein Macro ist
     snd_pcm_hw_params_malloc(&alsa->params);
-
-
 
     /*
      * This Block prepares the device for usage
      */
 #ifdef PRINT_DEBUG
-    printf("Preparing Device\n");
+    printf("(alsa) %i: Preparing Device\n", pids->pid_alsa);
 #endif
     rc = setup_pcm_struct( alsa->handle, alsa->params );
     if (rc != OK) {
@@ -148,13 +225,11 @@ int record_to_buffer( long *buffer, struct alsa_params *alsa ) {
         exit(1);
     }
 
-
-
     /*
      * This Block takes care of the buffer, the sound is read to, before used further
      */
 #ifdef PRINT_DEBUG
-    printf("Allocating Buffer\n");
+    printf("(alsa) %i: Allocating Buffer\n", pids->pid_alsa);
 #endif
     rc = snd_pcm_hw_params_get_period_size(alsa->params, &alsa->frames, &dir);
     if (rc < 0) {
@@ -164,98 +239,29 @@ int record_to_buffer( long *buffer, struct alsa_params *alsa ) {
     alsa->size = alsa->frames * 4;
 
     /*
-     * This block is needed to tell fft to continue
-     * TODO: Move this to a better place and split this function
+     * Copys the size at the end of the shared memory
+     * This needs to be coverd in quarz!
+     * &shmem[ i ] shifts the start point for the memcpy by i!
      */
-//    alsa->size = size;
-    kill( getpid(), SIGUSR2 );
+    memcpy( &shmem[ sizeof(pids) ], &alsa->size, sizeof(alsa->size) );
+    kill( pids->pid_fft_master, SIGUSR1 );
+#ifdef PRINT_SIGNAL
+    printf("(alsa) %i: send SIGUSR1 to %i\n", pids->pid_alsa, pids->pid_fft_master);
+#endif
 
 #ifdef PRINT_DEBUG
-    printf("Size of Buffer is %i\n", size);
-#endif /*VERBOSE*/
-    buffer = (long *) malloc(size);
-    if (buffer == NULL){
+    printf("(alsa) %i: Size of Buffer is %i\n", pids->pid_alsa, alsa->size);
+#endif
+
+    /*
+     * Needed for record_to_buffer()!
+     */
+    alsa->buffer = (long *) malloc(alsa->size);
+    if (alsa->buffer == NULL){
         print_error_code( MALLOC_ERROR );
         return MALLOC_ERROR;
     }
-#ifdef PRINT_DEBUG
-    printf("Entering Loop\n");
-#endif
 
-    unsigned int val = 0;
-    snd_pcm_hw_params_get_period_time(alsa->params, &val, &dir);
-    snd_pcm_hw_params_get_rate(alsa->params, &val, &dir);
-
-    snd_pcm_hw_params_free(alsa->params);
-
-    loops = 1;
-    while (loops > 0) {
-        loops--;
-        rc = snd_pcm_readi(alsa->handle, buffer, alsa->frames);
-
-        if (rc == -EPIPE) {
-            fprintf(stderr, "overrun occured\n");
-            snd_pcm_prepare(alsa->handle);
-        }else if (rc < 0) {
-            fprintf(stderr, "error from read: %s\n", snd_strerror(rc));
-        }else if (rc != (int)alsa->frames) {
-            fprintf(stderr, "short read, read %d frames\n", rc);
-        } else {
-#ifdef PRINT_DEBUG
-            printf("Frames read: %i\n", rc);
-#endif
-        }
-    }
-
-    snd_pcm_drain(alsa->handle);
-    snd_pcm_close(alsa->handle);
-//:    free(buffer);
-//    printf("%i\n", size);
-    return size;
-}
-
-int alsa_handler( int pipefd[2], void *shmem ) {
-    struct pid_collection *pids;
-    struct alsa_params *alsa;
-    int rc, dir;
-    void (*sigHandlerReturn)(int);
-    long *buffer;
-    bool loop;
-
-    alsa_state = ZERO;
-    pids = malloc( sizeof(struct pid_collection) );
-    alsa = malloc( sizeof(struct alsa_params) );
-    loop = true;
-
-    // alsa_act is global defined!
-    // The struct containes the needed informations
-    memset( &alsa_act, 0, sizeof(alsa_act) );
-
-    alsa_act.sa_sigaction = alsa_sig_handler;
-    alsa_act.sa_flags = SA_SIGINFO;
-
-    sigaction( SIGUSR1, &alsa_act, 0 );
-    sigaction( SIGCONT, &alsa_act, 0 );
-
-    kill (getppid(), SIGUSR1 );
-#ifdef PRINT_DEBUG
-    // Needed, as alsa currently doesn't know it's own pid
-    pids->pid_alsa = getpid();
-#endif
-
-    if( !((alsa_state & SHMEM_READ) >> SHIFT_S_R ) ) {
-#ifdef PRINT_DEBUG
-        printf("(alsa) %i; Waiting for SIGUSR1!\n", pids->pid_alsa);
-#endif
-        suspend( &alsa_state, SHMEM_READ, SHIFT_S_R );
-    }
-
-    memcpy( pids, shmem, sizeof(struct pid_collection) );
-
-    rc = record_to_buffer( buffer, alsa );
-
-    memcpy( &shmem[ sizeof(pids) ], &alsa->size, sizeof(alsa->size) );
-    kill( pids->pid_fft_master, SIGUSR1 );
 
     /*
      * Waiting for fft_master to complete it's setup
@@ -271,22 +277,36 @@ int alsa_handler( int pipefd[2], void *shmem ) {
     /*
      * Main RUNTIME Loop!
      */
-
-    char terminal = "\n";
-    rc = write( pipefd[1], &buffer, sizeof(buffer) );
-    printf("(alsa) %i: wrote %i to pipe\n", pids->pid_alsa, rc);
-    write( pipefd[1], &terminal, sizeof(terminal) );
-#ifdef PRINT_SIGNAL
-    printf("(alsa) %i: Send SIGCONT to (fft) %i\n", pids->pid_alsa, pids->pid_fft_master);
+    while( loop == true ) {
+#ifdef PRINT_DEBUG
+        printf("(alsa) %i: Top of loop\n", pids->pid_alsa);
 #endif
-    kill( pids->pid_fft_master, SIGCONT );
+#ifdef PRINT_DEBUG
+        printf("(alsa): handle %i, params %i, frames %i\n", alsa->handle, alsa->params, alsa->frames );
+#endif
+#ifdef BREAKPOINTS
+        raise(SIGUSR2);
+#endif
+        rc = record_to_buffer( buffer, *alsa );
+        if( rc != OK ){
+            return 1;
+        }
+
+        write( pipefd[1], &buffer, sizeof(buffer) );
+#ifdef PRINT_SIGNAL
+        printf("(alsa) %i: Send SIGCONT to (fft) %i\n", pids->pid_alsa, pids->pid_fft_master);
+#endif
+        kill( pids->pid_fft_master, SIGCONT );
+        loop = false;
+    }
 
     /*
      * Cleanup code
      */
-   // rc = close_device( alsa );
+    rc = close_device( alsa );
     free(alsa->buffer);
     free(alsa);
     free(pids);
     return OK;
 }
+
