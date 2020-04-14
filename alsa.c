@@ -112,8 +112,8 @@ int record_to_buffer( long *buffer, struct alsa_params *alsa ) {
     long loops;
     int rc, dir, size;
     snd_pcm_t *handle;
-//    snd_pcm_hw_params_t *params;
-//    snd_pcm_uframes_t frames;
+    snd_pcm_hw_params_t *params;
+    snd_pcm_uframes_t frames;
 //    handle = alsa.handle;
 //    params = alsa.params;
 //    frames = alsa.frames;
@@ -123,16 +123,22 @@ int record_to_buffer( long *buffer, struct alsa_params *alsa ) {
     /*
      * This block takes care of the device initialisation
      */
-    handle = open_device( DEVICE, SND_PCM_STREAM_CAPTURE, 0 );
+    alsa->handle = open_device( DEVICE, SND_PCM_STREAM_CAPTURE, 0 );
     if (rc < 0) {
         print_error_code( PCM_OPEN_FAIL );
     }
 #ifdef VERBOSE
     check_state( alsa->handle );
 #endif
-    alsa->handle = handle;
     // alloca hat keinen returnvalue da es ein Macro ist
-    snd_pcm_hw_params_malloc(&alsa->params);
+    /*
+     * This is needed for alsa to work
+     * if not included, it fails with:
+     * "snd_pcm_open(): Operation not allowed"
+     * no idea why or what part really is the problem
+     */
+    snd_pcm_hw_params_malloc(&params);
+    alsa->params = params;
 
 
 
