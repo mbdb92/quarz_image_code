@@ -1,124 +1,128 @@
-//For Debugging
-#include <assert.h>
-// For alsa ahndling
-#include <alsa/asoundlib.h>
-// For processes
-#include <sys/types.h>
-#include <unistd.h>
+// For wait
+#include <sys/wait.h>
+// For signals
+#include <signal.h>
+// For shared memory#
+#include <sys/mman.h>
+// For pipe, signals, wait, mmam
 #include <stdio.h>
+#include <unistd.h>
 #include <stdlib.h>
-// For defined functions
+#include "sighandler.h"
+// For strlen and strncmp
+#include <string.h>
+// For defines
+#include "codes.h"
 #include "type.h"
+// For calling alsa child
+#include "alsa.h"
 #include "fft.h"
-#include "magick.h"
-#include "recorder.h"
 
-int create_image_strip ( long *input ) {
-    struct fork_params fparams;
-    struct fft_data fdata;
+struct sigaction quarz_act;
 
-    fparams = malloc( sizeof(struct fork_params) );
-    fdata = malloc( sizeof(struct fft_data) );
-}
+int main () {
+    int pipefd[2];
+    int return_value, status;
+    struct pid_collection pids;
+    // To check if signalhandler is set correctly
+    void (*sig_handler_return) (int);
+    void *shmem;
+    int protection, visibility;
+    char temp_buffer;
+    
+    // Used for transfer of pid to childs later
+    quarz_state = ZERO;
 
-void audio_process ( struct quarz_params *params ) {
-    int return_value, dir;
-    long *audio_buffer;
+    memset( &quarz_act, 0, sizeof(quarz_act) );
 
-    params->alsa.handle = open_device( DEVICE, SND_PCM_STREAM_CAPTURE, 0 );
-    snd_pcm_hw_params_malloc( &params->alsa.params );
+    quarz_act.sa_sigaction = quarz_sig_handler;
+    quarz_act.sa_flags = SA_SIGINFO;
 
-    return_value = setup_pcm_struct( params->alsa.handle, params->alsa.params );
-    return_value = snd_pcm_hw_params_get_period_size( params->alsa.params, &params->alsa.frames, &dir );
-    params->fft.size = params->alsa.frames * 4;
+    sigaction( SIGUSR1, &quarz_act, 0 );
+    sigaction( SIGUSR2, &quarz_act, 0 );
 
-    audio_buffer = (long *) malloc(params->fft.size);
-    if( audio_buffer == NULL ) {
-        return E_MAL_BUF;
-    }
-#ifdef PRINT_DEBUG
-    printf("Size of frame: ");
-    printf("%i\n", params->fft.size);
-#endif
+    // Setup of the pipe
+    return_value = pipe(pipefd);
+    if( return_value != OK )
+        return E_PIPE;
 
-    while (true) {
-        return_value = record_to_buffer( audio_buffer, params->alsa );
-        if( return_value == OK ) {
-            
-}
-
-void fft_process ( struct quarz_params *params ) {
-
-}
-
-int main() {
+    // Setup for shared mamory
+    protection = PROT_READ | PROT_WRITE;
+    visibility = MAP_SHARED | MAP_ANONYMOUS;
 
     /*
-     * These two structs contain every value needed during runtime
-     * Constants are excluded
+     * The sizeof(int) is needed to transfer the size
      */
-    struct quarz_params *params;
-    struct quarz_data *data;
-    int return_value;
+    shmem = mmap( NULL, (sizeof(pids) + sizeof(int)), protection, visibility, -1, 0 );
 
-    params = malloc( sizeof(struct quarz_params) );
-    data = malloc( sizeof(struct quarz_data) );
+    // Forking for alsa
+    pids.pid_alsa = fork();
+    if( pids.pid_alsa == OK ) {
+        int rc;
 
-    return_value = pipe(params.pipefd);
+        rc = alsa_handler( pipefd, shmem );
 
-    if( return_vale != OK )
-        exit E_PIPE;
-
-    return_value = fork();
-    if( return_value == CHILD ) {
-        audio_process( params );
+    } else if( pids.pid_alsa == -1 ) {
+        return E_FORK;
+    // quarz continues here
     } else {
-        return_value = fork();
-        if( return_value == CHILD ) {
-            fft_process( params );
+        // Fork for fft handler
+        pids.pid_fft_master = fork();
+        if( pids.pid_fft_master == OK ) {
+            int rc;
+
+            rc = fft_handler( pipefd, shmem );
+
+        } else if( pids.pid_fft_master == -1 ){
+            return E_FORK;
+        /*
+         * This part is the quarz main task
+         */
+        } else {
+
+            /*
+             * This part pipes the pids of the childs to
+             * each other. With this I can prevent a
+             * shared memory
+             */
+            // For ALSA
+
+            close( pipefd[0] );
+            close( pipefd[1] );
+
+            pids.pid_quarz = getpid();
+#ifdef PRINT_DEBUG
+            printf("PIDS:\n");
+            printf("quarz: %i, alsa: %i, fft: %i\n", pids.pid_quarz, pids.pid_alsa, pids.pid_fft_master);
+            printf("State Adresses:\n");
+            printf("quarz: %i, alsa: %i, fft: %i\n", &quarz_state, &alsa_state, &fft_pipe_state);
+#endif
+            
+            memcpy( shmem, &pids, sizeof(struct pid_collection) );
+
+            while( !(((quarz_state & FFT_READY) >> SHIFT_F_R) && (quarz_state & ALSA_READY) >> SHIFT_A_R ) ) {
+                asm( "nop" );
+            }
+
+            kill( pids.pid_alsa, SIGUSR1 );
+#ifdef PRINT_SIGNAL
+            printf("(quarz) %i send SIGUSR1 to (alsa) %i\n", pids.pid_quarz, pids.pid_alsa);
+#endif
+        /*
+         * This part war staken from "man 3 wait"
+         * Check it for references and additions
+         * TODO Enhance this part to be more useful
+         */
+            do {
+                waitpid( pids.pid_alsa, &status, WUNTRACED
+            #ifdef WCONTINUED
+                        | WCONTINUED 
+            #endif
+                        );
+            } while( !WIFEXITED(status) );
+
         }
     }
 
-    
-    if( return_value != 0 ) {
-        long *faudio_buffer;
-
-        faudio_buffer = (long *) malloc(params->fft.size);
-        memcpy( faudio_buffer
-
-    /*
-     * this block calls the setup functions for startup
-     */
-    return_value = create_fft( &params->fft, &data->fft );
-    if( return_value != OK )
-        return ERR;
-    return_value = setup_drawing( &params->magick );
-    if( return_value != OK )
-        return ERR;
-
-    run_fft( &params->fft, &data->fft, audio_buffer );
-    run_magick_from_fft( &params->magick, &data->fft, (unsigned long) params->fft.size );
-
-    /*
-     * This block contains the tear-down functions
-     */
-#ifdef PRINF_DEBUG
-    printf("Starting cleanup\n");
-#endif
-    destroy_fft( &params->fft, &data->fft );
-    destroy_drawing( &params->magick );
-
-#ifdef PRINTF_DEBUG
-    printf("Freeing Audio\n");
-#endif
-    snd_pcm_drain(params->alsa.handle);
-    snd_pcm_close(params->alsa.handle);
-
-#ifdef PRINTF_DEBUG
-    printf("Freeing buffers\n");
-#endif
-    free(audio_buffer);
-    free(params);
-    free(data);
     return OK;
 }

@@ -10,6 +10,7 @@
 // for fabs()
 #include <math.h>
 // Local defined files
+#include "codes.h"
 #include "type.h"
 #include "magick.h"
 
@@ -83,30 +84,44 @@ int find_min_max( double *data, long *max, long *min, unsigned long size ) {
  * Main function, computing the fft.
  */
 int run_magick_from_fft( struct magick_params *magick, struct fft_data *fft_d, unsigned long size ) {
+    struct magick_params *local_magick;
     bool retval;
     long divider_green;
     unsigned int color_green;
     int len;
 
+    local_magick = malloc( sizeof(struct magick_params) );
+
+    /*
+     * with this the wands can be reused for each image,
+     * so there is no need to create new ones.
+     * Maybe this will be changed to Clone and
+     * removing them at the end...
+     * TODO Check is this or clone is needed!
+     */
+    local_magick->c_wand = ClonePixelWand( magick->c_wand );
+    local_magick->d_wand = CloneDrawingWand( magick->d_wand );
+    local_magick->m_wand = CloneMagickWand( magick->m_wand );
+
     // Adds the backround, black so colors can be seen better
     // This also sets the size of the image with the same size 
     // as the fft_in struct should have
     // X_SIZE is 1, as this is only one timeslot
-    PixelSetColor( magick->c_wand, "black" );
-    MagickNewImage( magick->m_wand, X_SIZE, size, magick->c_wand );
+    PixelSetColor( local_magick->c_wand, "black" );
+    MagickNewImage( local_magick->m_wand, X_SIZE, size, local_magick->c_wand );
 
     // This blocks prepares the factor, by which each value must be divided
     // to fit into 256 bit hex code
     // Only green is currently used as a color value
     // TODO: Check if this works by high dynamic input, or if this 
     // has to be changed to have a longer stored maximun and minimum value
-    find_min_max( fft_d->fft_out, &magick->max, &magick->min, size);
-    if( magick->min < 0 )
-        divider_green = (magick->max - magick->min) / BYTE_SIZE;
+    find_min_max( fft_d->fft_out, &local_magick->max, &local_magick->min, size);
+    if( local_magick->min < 0 )
+        divider_green = (local_magick->max - local_magick->min) / BYTE_SIZE;
 #ifdef PRINT_DEBUG
     printf("Going color\n");
     printf( "%li\n", divider_green);
-    printf( "%li, %li\n", magick->max, magick->min);
+    printf( "%li, %li\n", local_magick->max, local_magick->min);
 #endif
 
     // Iteartion over the output value struct fft_out
@@ -115,7 +130,7 @@ int run_magick_from_fft( struct magick_params *magick, struct fft_data *fft_d, u
         // Converts the double value in fft_out into an usigned int
         // The shift by magick->min is needed to have no negative values
         // This is needed to get the hex value
-        color_green = (int)( ((long) fabs(fft_d->fft_out[i]) + magick->min) / divider_green );
+        color_green = (int)( ((long) fabs(fft_d->fft_out[i]) + local_magick->min) / divider_green );
 
 #ifdef PRINT_DEBUG
         printf("%f\n", fft_d->fft_out[i]);
@@ -131,33 +146,33 @@ int run_magick_from_fft( struct magick_params *magick, struct fft_data *fft_d, u
             sprintf( magick->color, "#00%x%s", color_green, "00" );
         }
 */
-        sprintf( magick->color, "%x", color_green );
-        len = strlen( magick->color );
+        sprintf( local_magick->color, "%x", color_green );
+        len = strlen( local_magick->color );
 #ifdef PRINT_DEBUG
         printf("%i\n", len);
 #endif  
         switch( len ) {
             case 4:     
-                sprintf( magick->color, "#00%x", color_green );
+                sprintf( local_magick->color, "#00%x", color_green );
                 break;
             case 3:     
-                sprintf( magick->color, "#000%x", color_green );
+                sprintf( local_magick->color, "#000%x", color_green );
                 break;
             case 2:     
-                sprintf( magick->color, "#0000%x", color_green );
+                sprintf( local_magick->color, "#0000%x", color_green );
                 break;
             case 1:     
-                sprintf( magick->color, "#00000%x", color_green );
+                sprintf( local_magick->color, "#00000%x", color_green );
                 break;
             default:     
-                sprintf( magick->color, "#000000" );
+                sprintf( local_magick->color, "#000000" );
                 break;
         }
 #ifdef PRINT_DEBUG
-        printf("%s\n", magick->color);
+        printf("%s\n", local_magick->color);
 #endif  
         // This realy sets the color!
-        retval = PixelSetColor(magick->c_wand, magick->color);
+        retval = PixelSetColor(local_magick->c_wand, local_magick->color);
         if( retval != true ){
             return E_SET_COLOR;
         }
@@ -167,8 +182,8 @@ int run_magick_from_fft( struct magick_params *magick, struct fft_data *fft_d, u
         // This should draw the correct color
         // Both function have a void type,
         // therefor no return value is checked
-        DrawSetFillColor(magick->d_wand, magick->c_wand);
-        DrawPoint( magick->d_wand, (double) X_CORD, (double) i );
+        DrawSetFillColor(local_magick->d_wand, local_magick->c_wand);
+        DrawPoint( local_magick->d_wand, (double) X_CORD, (double) i );
 #ifdef PRINT_DEBUG
         printf("Point drawn\n");
 #endif
@@ -179,9 +194,13 @@ int run_magick_from_fft( struct magick_params *magick, struct fft_data *fft_d, u
 
     // Writes the file to disc
     // TODO: Change Output filename to a given parameter to function
-    MagickDrawImage(magick->m_wand, magick->d_wand);
-    MagickWriteImage(magick->m_wand, "test.jpg");
+    MagickDrawImage(local_magick->m_wand, local_magick->d_wand);
+    MagickWriteImage(local_magick->m_wand, "test.jpg");
 
+    DestroyMagickWand( local_magick->m_wand );
+    DestroyDrawingWand( local_magick->d_wand );
+    DestroyPixelWand( local_magick->c_wand );
+    free( local_magick );
     return OK;
 }
 

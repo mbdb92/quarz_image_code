@@ -1,5 +1,6 @@
-// Include needed types
+// Include needed types and codes
 #include "type.h"
+#include "codes.h"
 // FFTW
 #include <fftw3.h>
 // sin()
@@ -9,8 +10,16 @@
 #include <stdlib.h>
 //malloc_usabel_size
 #include <malloc.h>
+// For Signals
+#include <signal.h>
+#include <unistd.h>
+#include "sighandler.h"
+// To access magick runtime
+#include "magick.h"
+
 #include "fft.h"
 
+struct sigaction fft_act;
 /*
  * This Function sets up the needed structs
  */
@@ -39,137 +48,114 @@ int destroy_fft( struct fft_params *fft_p, struct fft_data *fft_d ) {
 }
 
 
-int run_fft( struct fft_params *fft_p, struct fft_data *fft_d, long *buffer ) {
+int fft_handler( int pipefd[2], void *shmem ) {
+    struct pid_collection *pids;
+    struct fft_params *fft_p;
+    struct fft_data *fft_d;
+    struct magick_params *magick_p;
     double *in;
     fftw_plan plan;
-    int retval;
-#ifdef PRINT_PLOT
-    FILE *gnuplot = popen("gnuplot -persistent", "w");
-    FILE *outfile = fopen("values.raw", "w+");
-#endif
+    int rc;
+    void (*sig_handler_return) (int);
 
+    /*
+     * This block is needed for the state handling
+     * The sig handlers are needed for inter process 
+     * communication and the state for setup and
+     * during runtime
+     */
+    fft_pipe_state = ZERO;
+
+    memset( &fft_act, 0, sizeof(fft_act) );
+
+    fft_act.sa_sigaction = fft_sig_handler;
+    fft_act.sa_flags = SA_SIGINFO;
+
+    sigaction( SIGUSR1, &fft_act, 0 );
+    sigaction( SIGCONT, &fft_act, 0 );
+
+    /* 
+     * The needed structs
+     */
+    pids = malloc( sizeof(struct pid_collection) );
+    fft_p = malloc( sizeof(struct fft_params) );
+    fft_d = malloc( sizeof(struct fft_data) );
+    magick_p = malloc( sizeof(struct magick_params) );
+    //plan = fftw_plan_dft_1d(fft_p->size, fft_d->fft_in, fft_d->fft_out, FFTW_FORWARD, FFTW_ESTIMATE);
+
+    close( pipefd[1] );
+    /*
+     * Get pid of parrent to be ready to complet init step
+     * The wait for the signals to read the shared memory
+     * once done, send signal to alsa to run main loop
+     */
+
+    kill( getppid(), SIGUSR2 );
+
+    if( !((fft_pipe_state & SHMEM_READ) >> SHIFT_S_R) ) {
+#ifdef PRINT_SIGNAL
+        printf("(fft) %i: waiting for SIGUSR1 to get size\n", pids->pid_fft_master);
+#endif
+        suspend( &fft_pipe_state, SHMEM_READ, SHIFT_S_R );
+    }
+    memcpy( pids, shmem, sizeof(struct pid_collection) );
+    memcpy( &fft_p->size, &shmem[ sizeof(struct pid_collection) ], sizeof(fft_p->size) );
+
+#ifdef PRINT_DEBUG
+    printf("(fft) %i: read from shmem: %i, %i, %i, %i \n", pids->pid_fft_master, pids->pid_quarz, pids->pid_alsa, pids->pid_fft_master, fft_p->size);
+#endif
     /*
      * This is currently needed, as using the fft_d->fft_in array doesn't work
      * TODO: Fix error
      */
+    rc = create_fft( fft_p, fft_d );
     in = (double*) fftw_malloc(sizeof(fftw_complex) * fft_p->size);
-    //plan = fftw_plan_dft_1d(fft_p->size, fft_d->fft_in, fft_d->fft_out, FFTW_FORWARD, FFTW_ESTIMATE);
+
+    rc = setup_drawing( magick_p );
+
     fft_p->plan = fftw_plan_r2r_1d(fft_p->size, in, fft_d->fft_out, FFTW_DHT, FFTW_ESTIMATE);
 
-    for( int i = 0; i < fft_p->size; i++ ) {
-        in[i] = (double) buffer[i];
+    fft_pipe_state += RUNTIME;
+    /*
+     * Send SIGCONT to alsa, to start RUNTIME
+     */
+#ifdef PRINT_SIGNAL
+    printf("(fft) %i: Send SIGCONT to (alsa) %i\n", pids->pid_fft_master, pids->pid_alsa);
+#endif
+    kill( pids->pid_alsa, SIGCONT );
+
+    if( !((fft_pipe_state & ALSA_DONE) >> SHIFT_A_D) ) {
+#ifdef PRINT_SIGNAL
+        printf("(fft) %i: waiting for SIGCONT to read input\n", pids->pid_fft_master);
+#endif
+        suspend( &fft_pipe_state, ALSA_DONE, SHIFT_A_D );
     }
 
+    long *buffer;
+    buffer = malloc( fft_p->size );
+    //rc = read( pipefd[0], in, fft_p->size );
+    rc = read( pipefd[0], buffer, fft_p->size );
+    for( int i = 0; i< fft_p->size; i++ ){
+        in[i] = (double) buffer[i];
+    }
     free(buffer);
-//    retval = fill_input_struct( fft_p, fft_d, in );
+#ifdef PRINT_DEBUG
+    printf("(fft) %i: read %i from pipe\n", pids->pid_fft_master, rc);
+#endif
     
     /*
      * The previous created plan gets executed here
      */
     fftw_execute(fft_p->plan);
-
-#ifdef PRINT_PLOT
-    /*
-     * the gnu-plot code is for debugging,
-     * not needed in final code
-     */
-    fprintf(gnuplot, "plot '-'\n");
-
-    for( int j = 0; j < fft_p->size; j++){
-        fprintf(gnuplot, "%g %g\n", (double) j, fft_d->fft_out[j]);
-    }
-
-    fprintf(gnuplot, "e\n");
-    fflush(gnuplot);
-#endif
-
-#ifdef PRINT_DEBUG
-    for( int i = 0; i < fft_p->size; i++ ) {
-        printf("%f\n", fft_d->fft_out[i]);
-    }
-#endif
+    run_magick_from_fft( magick_p, fft_d, (unsigned long) fft_p->size );
 
     fftw_free(in);
+    destroy_drawing( magick_p );
+    destroy_fft( fft_p, fft_d );
+    free(fft_d);
+    free(fft_p);
+    free(pids);
 
     return OK;
 }
 
-
-
-/*
- * these for-loops generate a mixed cos function
- * Used for testing and controlled dev
- */
-int fill_input_struct( struct fft_params *fft_p, struct fft_data *fft_d, double *in  ) {
-    double x, val;
-    float c;
-    val = PI / 180;
-
-    for( int i = 0; i < fft_p->size; i++ ){
-        x = 1.0 * i;
-        c = cos(x*val);
-        fft_d->fft_in[i] = c;
-        in[i] = c;
-        if (c != fft_d->fft_in[i] )
-            return E_W_COS;
-    }
-    for( int i = 0; i < fft_p->size; i++ ){
-        x = 10.0 * i;
-        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
-        in[i] = in[i] + cos(x*val);
-    }
-    for( int i = 0; i < fft_p->size; i++ ){
-        x = 10.0 * i;
-        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
-        in[i] = in[i] + cos(x*val);
-    }
-    for( int i = 0; i < fft_p->size; i++ ){
-        x = 50.0 * i;
-        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
-        in[i] = in[i] + cos(x*val);
-    }
-    for( int i = 0; i < fft_p->size; i++ ){
-        x = 49.0 * i;
-        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
-        in[i] = in[i] + cos(x*val);
-    }
-    for( int i = 0; i < fft_p->size; i++ ){
-        x = 48.0 * i;
-        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
-        in[i] = in[i] + cos(x*val);
-    }
-    for( int i = 0; i < fft_p->size; i++ ){
-        x = 10.0 * i;
-        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
-        in[i] = in[i] + cos(x*val);
-    }
-    for( int i = 0; i < fft_p->size; i++ ){
-        x = 47.0 * i;
-        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
-        in[i] = in[i] + cos(x*val);
-    }
-    for( int i = 0; i < fft_p->size; i++ ){
-        x = 46.0 * i;
-        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
-        in[i] = in[i] + cos(x*val);
-    }
-    for( int i = 0; i < fft_p->size; i++ ){
-        x = 45.0 * i;
-        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
-        in[i] = in[i] + cos(x*val);
-    }
-
-    for( int i = 0; i < fft_p->size; i++ ){
-        x = 5.0 * i;
-        fft_d->fft_in[i] = fft_d->fft_in[i] + cos(x*val);
-        in[i] = in[i] + cos(x*val);
-#ifdef PRINT_DEBUG
-//        fprintf(outfile, "%lf\n", *fft_d->fft_in[i]);
-//        fprintf(outfile, "%lf\n", *in[i]);
-//        printf("%f\n", in[i][0]);
-//        printf("%f\n", fft_d->fft_in[i][0]);
-#endif
-    }
-
-    return OK;
-}
