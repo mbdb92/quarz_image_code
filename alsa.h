@@ -18,8 +18,7 @@
 void alsa_sig_handler( int signum );
 int setup_pcm_struct( snd_pcm_t *handle, snd_pcm_hw_params_t *params );
 snd_pcm_t * open_device( const char *name, snd_pcm_stream_t stream, int mode );
-int close_device( struct alsa_params *alsa );
-int record_to_buffer( long *buffer, struct alsa_params *alsa );
+int setup_device( long *buffer, struct alsa_params *alsa );
 int run_loop( int loops, long *buffer, struct alsa_params *alsa );
 int alsa_handler( int pipefd[2], void *shmem );
 

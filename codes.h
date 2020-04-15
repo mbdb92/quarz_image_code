@@ -28,9 +28,9 @@
 #define E_MAL_FFT_IN 1
 #define E_MAL_FFT_OUT 2
 #define E_ADD_FFT_PLAN 3
-/*
+
 #define E_SET_COLOR 5
 #define E_MAL_MAGICK_COLOR 6
 #define E_MAL_BUF 8
-*/
+
 #endif /*CODES_H*/

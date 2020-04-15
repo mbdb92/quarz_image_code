@@ -1,7 +1,7 @@
 CC=clang
 CFLAGS=
 OBJ = quarz.out
-FILE = quarz.c fft.c alsa.c error_n_info.c sighandler.c
+FILE = quarz.c fft.c alsa.c error_n_info.c sighandler.c magick.c
 
 LIBS_STATIC = -static
 LIBS_ALSA = -lasound

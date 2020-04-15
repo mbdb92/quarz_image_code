@@ -14,6 +14,8 @@
 #include <signal.h>
 #include <unistd.h>
 #include "sighandler.h"
+// To access magick runtime
+#include "magick.h"
 
 #include "fft.h"
 
@@ -50,9 +52,10 @@ int fft_handler( int pipefd[2], void *shmem ) {
     struct pid_collection *pids;
     struct fft_params *fft_p;
     struct fft_data *fft_d;
+    struct magick_params *magick_p;
     double *in;
     fftw_plan plan;
-    int retval;
+    int rc;
     void (*sig_handler_return) (int);
 
     /*
@@ -77,6 +80,7 @@ int fft_handler( int pipefd[2], void *shmem ) {
     pids = malloc( sizeof(struct pid_collection) );
     fft_p = malloc( sizeof(struct fft_params) );
     fft_d = malloc( sizeof(struct fft_data) );
+    magick_p = malloc( sizeof(struct magick_params) );
     //plan = fftw_plan_dft_1d(fft_p->size, fft_d->fft_in, fft_d->fft_out, FFTW_FORWARD, FFTW_ESTIMATE);
 
     close( pipefd[1] );
@@ -104,7 +108,10 @@ int fft_handler( int pipefd[2], void *shmem ) {
      * This is currently needed, as using the fft_d->fft_in array doesn't work
      * TODO: Fix error
      */
+    rc = create_fft( fft_p, fft_d );
     in = (double*) fftw_malloc(sizeof(fftw_complex) * fft_p->size);
+
+    rc = setup_drawing( magick_p );
 
     fft_p->plan = fftw_plan_r2r_1d(fft_p->size, in, fft_d->fft_out, FFTW_DHT, FFTW_ESTIMATE);
 
@@ -124,29 +131,26 @@ int fft_handler( int pipefd[2], void *shmem ) {
         suspend( &fft_pipe_state, ALSA_DONE, SHIFT_A_D );
     }
 
-    read( pipefd[0], in, (fft_p->size / 2) );
-/*
-    for( int i = 0; i < fft_p->size; i++ ) {
-    //    in[i] = (double) buffer[i];
-        read( pipefd[0], &in[i], sizeof(long) );
-#ifdef PRINT_DEBUG
-        printf("(fft) %i: read long from pipe: %li\n", pids->fft_master_pid, (long) in[i]);
-#endif
+    long *buffer;
+    buffer = malloc( fft_p->size );
+    //rc = read( pipefd[0], in, fft_p->size );
+    rc = read( pipefd[0], buffer, fft_p->size );
+    for( int i = 0; i< fft_p->size; i++ ){
+        in[i] = (double) buffer[i];
     }
-*/
-
-//    free(buffer);
-//    retval = fill_input_struct( fft_p, fft_d, in );
+    free(buffer);
+#ifdef PRINT_DEBUG
+    printf("(fft) %i: read %i from pipe\n", pids->pid_fft_master, rc);
+#endif
     
     /*
      * The previous created plan gets executed here
      */
     fftw_execute(fft_p->plan);
+    run_magick_from_fft( magick_p, fft_d, (unsigned long) fft_p->size );
 
-    for( int i = 0; i < fft_p->size; i++ ) {
-        printf("%f\n", fft_d->fft_out[i]);
-    }
     fftw_free(in);
+    destroy_drawing( magick_p );
     destroy_fft( fft_p, fft_d );
     free(fft_d);
     free(fft_p);

@@ -108,17 +108,12 @@ snd_pcm_t * open_device( const char *name, snd_pcm_stream_t stream, int mode ) {
 
 
 
-int record_to_buffer( long *buffer, struct alsa_params *alsa ) {
+int setup_device( long *buffer, struct alsa_params *alsa ) {
     long loops;
     int rc, dir, size;
     snd_pcm_t *handle;
     snd_pcm_hw_params_t *params;
     snd_pcm_uframes_t frames;
-//    handle = alsa.handle;
-//    params = alsa.params;
-//    frames = alsa.frames;
-//    static double *buffer;
-
 
     /*
      * This block takes care of the device initialisation
@@ -173,8 +168,6 @@ int record_to_buffer( long *buffer, struct alsa_params *alsa ) {
      * This block is needed to tell fft to continue
      * TODO: Move this to a better place and split this function
      */
-//    alsa->size = size;
-    kill( getpid(), SIGUSR2 );
 
 #ifdef PRINT_DEBUG
     printf("Size of Buffer is %i\n", size);
@@ -188,40 +181,19 @@ int record_to_buffer( long *buffer, struct alsa_params *alsa ) {
     printf("Entering Loop\n");
 #endif
 
+    // TODO Check if this block is still needed!
     unsigned int val = 0;
     snd_pcm_hw_params_get_period_time(alsa->params, &val, &dir);
     snd_pcm_hw_params_get_rate(alsa->params, &val, &dir);
 
     snd_pcm_hw_params_free(alsa->params);
 
-    /*
-    loops = 1;
-    while (loops > 0) {
-        loops--;
-        rc = snd_pcm_readi(alsa->handle, buffer, alsa->frames);
-
-        if (rc == -EPIPE) {
-            fprintf(stderr, "overrun occured\n");
-            snd_pcm_prepare(alsa->handle);
-        }else if (rc < 0) {
-            fprintf(stderr, "error from read: %s\n", snd_strerror(rc));
-        }else if (rc != (int)alsa->frames) {
-            fprintf(stderr, "short read, read %d frames\n", rc);
-        } else {
-#ifdef PRINT_DEBUG
-            printf("Frames read: %i\n", rc);
-#endif
-        }
-    }
-    */
-
-//:    free(buffer);
-//    printf("%i\n", size);
-//    snd_pcm_drain(alsa->handle);
-//    snd_pcm_close(alsa->handle);
     return size;
 }
 
+/*
+ * Runs loop for the specified number of counts
+ */
 int run_loop ( int loops, long *buffer, struct alsa_params *alsa ) {
     int rc;
 
@@ -242,6 +214,7 @@ int run_loop ( int loops, long *buffer, struct alsa_params *alsa ) {
 #endif
         }
     }
+    return 0;
 }
 
 int alsa_handler( int pipefd[2], void *shmem ) {
@@ -257,6 +230,7 @@ int alsa_handler( int pipefd[2], void *shmem ) {
 
     // alsa_act is global defined!
     // The struct containes the needed informations
+    // Rest is sighandler code
     memset( &alsa_act, 0, sizeof(alsa_act) );
 
     alsa_act.sa_sigaction = alsa_sig_handler;
@@ -265,8 +239,10 @@ int alsa_handler( int pipefd[2], void *shmem ) {
     sigaction( SIGUSR1, &alsa_act, 0 );
     sigaction( SIGCONT, &alsa_act, 0 );
 
+    // This end of the pipe isn't needed in thos process
     close( pipefd[0] );
 
+    // Tell quarz this child is ready and sleepy
     kill (getppid(), SIGUSR1 );
 #ifdef PRINT_DEBUG
     // Needed, as alsa currently doesn't know it's own pid
@@ -280,11 +256,20 @@ int alsa_handler( int pipefd[2], void *shmem ) {
         suspend( &alsa_state, SHMEM_READ, SHIFT_S_R );
     }
 
+    /*
+     * As quarz is done, the pids needed to be read, 
+     * then the audio device can be initialized
+     * After that, the size needed to be added for fft
+     * so it can be set up accordingly
+     */
     memcpy( pids, shmem, sizeof(struct pid_collection) );
 
-    rc = record_to_buffer( buffer, alsa );
+    rc = setup_device( buffer, alsa );
+    // Tell us we are ready...
+    // TODO is this call needed?
+    kill( getpid(), SIGUSR2 );
 
-    memcpy( &shmem[ sizeof(pids) ], &alsa->size, sizeof(alsa->size) );
+    memcpy( &shmem[ sizeof(struct pid_collection) ], &alsa->size, sizeof(alsa->size) );
     kill( pids->pid_fft_master, SIGUSR1 );
 
     /*
@@ -305,7 +290,9 @@ int alsa_handler( int pipefd[2], void *shmem ) {
     loops = 1;
     run_loop( loops, buffer, alsa );
     rc = write( pipefd[1], &buffer, alsa->size );
+#ifdef PRINT_DEBUG
     printf("(alsa) %i: wrote %i to pipe\n", pids->pid_alsa, rc);
+#endif
 #ifdef PRINT_SIGNAL
     printf("(alsa) %i: Send SIGCONT to (fft) %i\n", pids->pid_alsa, pids->pid_fft_master);
 #endif
@@ -314,7 +301,6 @@ int alsa_handler( int pipefd[2], void *shmem ) {
     /*
      * Cleanup code
      */
-   // rc = close_device( alsa );
     snd_pcm_drain(alsa->handle);
     snd_pcm_close(alsa->handle);
     free(alsa->buffer);

@@ -86,6 +86,10 @@ int main () {
              * shared memory
              */
             // For ALSA
+
+            close( pipefd[0] );
+            close( pipefd[1] );
+
             pids.pid_quarz = getpid();
 #ifdef PRINT_DEBUG
             printf("PIDS:\n");
