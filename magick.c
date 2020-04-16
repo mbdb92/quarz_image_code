@@ -1,9 +1,11 @@
+//t
 //Default input-output
 #include <stdio.h>
 #include <stdlib.h>
 // Data type definition
 #include <stdbool.h>
 #include <string.h>
+// Time to be able to name the file accordingly
 #include <time.h>
 // For debugging
 #include <assert.h>
@@ -25,18 +27,6 @@ int setup_drawing( struct magick_params *magick ) {
     magick->d_wand = NewDrawingWand();
     magick->c_wand = NewPixelWand();
 
-/*
- * This code block is legacy code. Needed, while color was holded,
- * in a seperated allocated memory part
- */
-
-/*
-    magick->color = malloc( 8 * sizeof(char) );
-    if( magick->color == NULL )
-        return E_MAL_MAGICK_COLOR;
-
-    assert( magick->color != NULL );
-*/
     magick->max = 0;
     magick->min = 0;
     
@@ -56,7 +46,6 @@ int destroy_drawing( struct magick_params *magick ) {
     DestroyDrawingWand(magick->d_wand);
 
     MagickWandTerminus();
-    //free( magick->color );
     return 0;
 }
 
@@ -85,8 +74,10 @@ int find_min_max( double *data, long *max, long *min, unsigned long size ) {
  */
 int run_magick_from_fft( struct magick_params *magick, struct fft_data *fft_d, unsigned long size ) {
     struct magick_params *local_magick;
-    bool retval;
-    long divider_green;
+    struct timespec now;
+    char filename[100];
+    bool rc;
+    long divider_green, ms;
     unsigned int color_green;
     int len;
 
@@ -139,13 +130,6 @@ int run_magick_from_fft( struct magick_params *magick, struct fft_data *fft_d, u
 
         // Sets the correct color string
         // Padding if the hex value would be single digit
-/*
-        if( color_green < HEX_MAX && color_green >= HEX_MIN ) {
-            sprintf( magick->color, "#000%x%s", color_green, "00" );
-        } else {
-            sprintf( magick->color, "#00%x%s", color_green, "00" );
-        }
-*/
         sprintf( local_magick->color, "%x", color_green );
         len = strlen( local_magick->color );
 #ifdef PRINT_DEBUG
@@ -172,8 +156,8 @@ int run_magick_from_fft( struct magick_params *magick, struct fft_data *fft_d, u
         printf("%s\n", local_magick->color);
 #endif  
         // This realy sets the color!
-        retval = PixelSetColor(local_magick->c_wand, local_magick->color);
-        if( retval != true ){
+        rc = PixelSetColor(local_magick->c_wand, local_magick->color);
+        if( rc != true ){
             return E_SET_COLOR;
         }
 #ifdef PRINT_DEBUG
@@ -193,9 +177,19 @@ int run_magick_from_fft( struct magick_params *magick, struct fft_data *fft_d, u
 #endif
 
     // Writes the file to disc
-    // TODO: Change Output filename to a given parameter to function
+    // WARNING: CLOCK_REALTIME_COARSE is Linux specific!
+    // According to man 3 cloack_gettime, it is only implemented in the Linux Kernel
+    // This makes the code Linux specific. changeing it to CLOCK_REALTIME should
+    // undo this. But the code was developed under Linux, so no idea if it compiles
+    // on a Windows or Mac
+    // I chose _COARSE as according to the manpage it's faster but less precise
+    // I am more concerned for the runtime of a call than abióut the precission
+    clock_gettime( CLOCK_REALTIME_COARSE, &now );
+    ms = floor( now.tv_nsec / 1.0e3 );
+    sprintf( filename, "%i%03ld.jpg", (int) now.tv_sec, ms );
+    
     MagickDrawImage(local_magick->m_wand, local_magick->d_wand);
-    MagickWriteImage(local_magick->m_wand, "test.jpg");
+    MagickWriteImage(local_magick->m_wand, filename);
 
     DestroyMagickWand( local_magick->m_wand );
     DestroyDrawingWand( local_magick->d_wand );
