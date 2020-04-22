@@ -8,7 +8,11 @@
 //For fft
 #include <fftw3.h>
 // For magick
+#ifdef WAND
 #include <MagickWand/MagickWand.h>
+#else
+#include <MagickCore/MagickCore.h>
+#endif
 
 //typedef int bool;
 #define true 1
@@ -43,6 +47,7 @@ struct fft_data {
     double *fft_out;
 };
 
+#ifdef WAND
 struct magick_params {
     MagickWand *m_wand;
     DrawingWand *d_wand;
@@ -51,5 +56,17 @@ struct magick_params {
     long max;
     long min;
 };
+#else
+struct magick_core_params {
+    ExceptionInfo *exception;
+    Image *image;
+    ImageInfo *image_info;
+    char *pixels;
+    char path[50];
+    char color[8];
+    long max;
+    long min;
+};
+#endif
 
 #endif //TYPE_H

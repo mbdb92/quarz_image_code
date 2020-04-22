@@ -1,7 +1,6 @@
-//t
-//Default input-output
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 // Data type definition
 #include <stdbool.h>
 #include <string.h>
@@ -15,7 +14,33 @@
 #include "codes.h"
 #include "type.h"
 #include "magick.h"
+#ifdef WAND
+#include <MagickWand/MagickWand.h>
+#else
+#include <MagickCore/MagickCore.h>
+#endif
 
+/*
+ * This function is needed to find the range for the values out of the fft
+ *
+ * This is needed, to calculate the correct value for the color. To make the rest of the code
+ * more readable, it's moved here
+ */
+int find_min_max( double *data, long *max, long *min, unsigned long size ) {
+    *max = 0;
+    *min = 0;
+
+    for( int i = 0; i < size; i++ ){
+        if( (long) fabs(data[i]) > *max )
+            *max = (long) fabs(data[i]);
+
+        if( (long) fabs(data[i]) < *min ) 
+            *min = (long) fabs(data[i]);
+    }
+    return OK;
+}
+
+#ifdef WAND
 /*
  * This function should set up the needed Wands and stuff
  */
@@ -47,26 +72,6 @@ int destroy_drawing( struct magick_params *magick ) {
 
     MagickWandTerminus();
     return 0;
-}
-
-/*
- * This function is needed to find the range for the values out of the fft
- *
- * This is needed, to calculate the correct value for the color. To make the rest of the code
- * more readable, it's moved here
- */
-int find_min_max( double *data, long *max, long *min, unsigned long size ) {
-    *max = 0;
-    *min = 0;
-
-    for( int i = 0; i < size; i++ ){
-        if( (long) fabs(data[i]) > *max )
-            *max = (long) fabs(data[i]);
-
-        if( (long) fabs(data[i]) < *min ) 
-            *min = (long) fabs(data[i]);
-    }
-    return OK;
 }
 
 /*
@@ -198,3 +203,94 @@ int run_magick_from_fft( struct magick_params *magick, struct fft_data *fft_d, u
     return OK;
 }
 
+#else //If not definde Wand
+
+int setup_drawing( char *path, struct magick_core_params *params ) {
+    MagickCoreGenesis( path, MagickTrue );
+    params->exception = AcquireExceptionInfo();
+    params->image_info = AcquireImageInfo();
+    GetImageInfo( params->image_info );
+
+    (void) strcpy( params->image_info->filename, path );
+
+    return OK;
+}
+
+int destroy_drawing( struct magick_core_params *params ) {
+    params->image_info = DestroyImageInfo( params->image_info );
+    params->image = DestroyImage( params->image );
+    params->exception = DestroyExceptionInfo( params->exception );
+
+    MagickCoreTerminus();
+
+    return OK;
+}
+
+int run_magick_from_fft( struct fft_data *fft_d, unsigned long size ) {
+    struct magick_core_params *local_magick;
+    struct timespec now;
+    long divider, ms;
+    unsigned int color;
+    int rc, len;
+
+    local_magick = malloc( sizeof(struct magick_core_params) );
+    local_magick->pixels = malloc( size * sizeof(int) );
+
+    // >Setting the time as filename
+    clock_gettime( CLOCK_REALTIME_COARSE, &now );
+    ms = floor( now.tv_nsec / 1.0e3 );
+    sprintf( local_magick->path, "%i%03ld.jpg", (int) now.tv_sec, ms );
+
+    rc = setup_drawing( &local_magick->path, local_magick );
+
+    // Um die double werte, die hier eh schon convertiert zu long sid, aus fft
+    // suaber auf den Farbraum runterzurechnen wird hier ein Faktor genommen, 
+    // der den Max. Hub beschreibt
+    find_min_max( fft_d->fft_out, &local_magick->max, &local_magick->min, size );
+    if( local_magick->min < 0 )
+        divider = (local_magick->max - local_magick->min) /BYTE_SIZE;
+    
+    for( int i = 0; i < size; i++ ) {
+        color = (int)( ((long) fabs(fft_d->fft_out[i]) + local_magick->min) / divider );
+
+        /*
+         * This part transforms the input into an char string
+         * This char string is the input for the pixels
+         * TODO couldn't be the type int be used?
+         */
+        sprintf( local_magick->color, "%x", color );
+        len = strlen( local_magick -> color );
+        switch( len ) {
+            case 6:
+                sprintf( &local_magick->pixels[i], "#%x", color );
+                break;
+            case 5:
+                sprintf( &local_magick->pixels[i], "#0%x", color );
+                break;
+            case 4:
+                sprintf( &local_magick->pixels[i], "#00%x", color );
+                break;
+            case 3:
+                sprintf( &local_magick->pixels[i], "#000%x", color );
+                break;
+            case 2:
+                sprintf( &local_magick->pixels[i], "#0000%x", color );
+                break;
+            case 1:
+                sprintf( &local_magick->pixels[i], "#00000%x", color );
+                break;
+            default:
+                sprintf( &local_magick->pixels[i], "#000000" );
+                break;
+        }
+    }
+
+    local_magick->image = ConstituteImage(X_SIZE, size, "RGB", CharPixel, local_magick->pixels, local_magick->exception );
+
+    WriteImage( local_magick->image_info, local_magick->image, local_magick->exception );
+
+    destroy_drawing( local_magick );
+    return OK;
+} 
+
+#endif
