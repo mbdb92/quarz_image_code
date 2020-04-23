@@ -206,13 +206,21 @@ int run_magick_from_fft( struct magick_params *magick, struct fft_data *fft_d, u
 #else //If not definde Wand
 
 int setup_drawing( char *path, struct magick_core_params *params ) {
-    MagickCoreGenesis( path, MagickTrue );
+    // Filename Max gets defined by stdio.h
+    char dir[FILENAME_MAX];
+
+    getcwd( dir, FILENAME_MAX );
+    MagickCoreGenesis( dir, MagickTrue );
     params->exception = AcquireExceptionInfo();
     params->image_info = AcquireImageInfo();
+    //params->image_info = CloneImageInfo( (ImageInfo *) NULL );
     GetImageInfo( params->image_info );
 
     (void) strcpy( params->image_info->filename, path );
 
+#ifdef PRINT_DEBUG
+    printf("(magick): Dir is %s, Filename is %s\n", dir, params->image_info->filename );
+#endif
     return OK;
 }
 
@@ -234,14 +242,14 @@ int run_magick_from_fft( struct fft_data *fft_d, unsigned long size ) {
     int rc, len;
 
     local_magick = malloc( sizeof(struct magick_core_params) );
-    local_magick->pixels = malloc( size * sizeof(int) );
+    local_magick->pixels = malloc( size * sizeof(char) );
 
     // >Setting the time as filename
     clock_gettime( CLOCK_REALTIME_COARSE, &now );
     ms = floor( now.tv_nsec / 1.0e3 );
     sprintf( local_magick->path, "%i%03ld.jpg", (int) now.tv_sec, ms );
 
-    rc = setup_drawing( &local_magick->path, local_magick );
+    rc = setup_drawing( &local_magick->path[0], local_magick );
 
     // Um die double werte, die hier eh schon convertiert zu long sid, aus fft
     // suaber auf den Farbraum runterzurechnen wird hier ein Faktor genommen, 
@@ -286,10 +294,16 @@ int run_magick_from_fft( struct fft_data *fft_d, unsigned long size ) {
     }
 
     local_magick->image = ConstituteImage(X_SIZE, size, "RGB", CharPixel, local_magick->pixels, local_magick->exception );
+#ifdef PRINT_DEBUG
+    printf("(magick): consituting image done\n");
+#endif
 
-    WriteImage( local_magick->image_info, local_magick->image, local_magick->exception );
+    //WriteImage( local_magick->image_info, local_magick->image, local_magick->exception );
+    WriteImages( local_magick->image_info, local_magick->image, local_magick->path, local_magick->exception );
 
     destroy_drawing( local_magick );
+    free(local_magick->pixels);
+    free(local_magick);
     return OK;
 } 
 
