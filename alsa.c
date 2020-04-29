@@ -236,6 +236,7 @@ int alsa_handler( int pipefd[2], void *shmem ) {
     alsa_act.sa_sigaction = alsa_sig_handler;
     alsa_act.sa_flags = SA_SIGINFO;
 
+    sigaction( SIGUSR2, &alsa_act, 0 );
     sigaction( SIGUSR1, &alsa_act, 0 );
     sigaction( SIGCONT, &alsa_act, 0 );
 
@@ -288,14 +289,26 @@ int alsa_handler( int pipefd[2], void *shmem ) {
      */
 
     loops = 1;
-    run_loop( loops, buffer, alsa );
-    rc = write( pipefd[1], &buffer, alsa->size );
+    int testcount = 0;
+    while( !((alsa_state & TERMINATE) >> SHIFT_T ) ){
+        testcount++;
+        run_loop( loops, buffer, alsa );
+        // This can be toogled by fft with SIGUSR2
+        // It is intended to make alsa dump the readed
+        // frames, if fft can't handle them but continue
+        // reading the buffer to always get the latest frames
+        if( (alsa_state & RUNTIME) >> SHIFT_R ) {
+            rc = write( pipefd[1], &buffer, alsa->size );
 #ifdef PRINT_DEBUG
-    printf("(alsa) %i: wrote %i to pipe\n", pids->pid_alsa, rc);
+            printf("(alsa) %i: wrote %i to pipe\n", pids->pid_alsa, rc);
 #endif
 #ifdef PRINT_SIGNAL
-    printf("(alsa) %i: Send SIGCONT to (fft) %i\n", pids->pid_alsa, pids->pid_fft_master);
+        printf("(alsa) %i: Send SIGCONT to (fft) %i\n", pids->pid_alsa, pids->pid_fft_master);
 #endif
+        }
+        if( testcount == 5 )
+            alsa_state += TERMINATE;
+    }
     kill( pids->pid_fft_master, SIGCONT );
 
     /*

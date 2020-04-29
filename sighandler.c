@@ -28,6 +28,7 @@ void quarz_sig_handler( int signum ) {
 }
 
 void alsa_sig_handler( int signum ) {
+    // Gets raised by fft, once it's ready to start
     if( signum == SIGCONT ) {
         if( !( (alsa_state & RUNTIME) >> SHIFT_R ) ) {
             alsa_state += RUNTIME;
@@ -36,11 +37,30 @@ void alsa_sig_handler( int signum ) {
 #endif
         }
     }
+    // This gets raised by quarz, once the shared memory is filled
+    // and alsa can read from it
     if( signum == SIGUSR1 ) {
         if( !( (alsa_state & SHMEM_READ) >> SHIFT_S_R ) ) {
             alsa_state += SHMEM_READ;
 #ifdef PRINT_SIGNAL
             printf("(alsa) caught SIGUSR1, state = %i\n", alsa_state);
+#endif
+        }
+    }
+    // This is raised by fft_master to signal alsa if it should write to
+    // the pipe or not.
+    // It works like a toggle switch
+    if( signum == SIGUSR2 ) {
+        if( ( (alsa_state & RUNTIME) >> SHIFT_R ) ) {
+            alsa_state = alsa_state - RUNTIME;
+#ifdef PRINT_SIGNAL
+            printf("(alsa) caught SIGUSR2, state = %i\n", alsa_state);
+#endif
+        }
+        if( !( (alsa_state & RUNTIME) >> SHIFT_R ) ) {
+            alsa_state = alsa_state + RUNTIME;
+#ifdef PRINT_SIGNAL
+            printf("(alsa) caught SIGUSR2, state = %i\n", alsa_state);
 #endif
         }
     }

@@ -146,13 +146,15 @@ int fft_handler( int pipefd[2], void *shmem ) {
             buffer = malloc( fft_p->size * sizeof(long) );
     //rc = read( pipefd[0], in, fft_p->size );
             rc = read( pipefd[0], buffer, (fft_p->size * sizeof(long) ));
+            if( rc < 1 )
+                exit(0);
             for( int i = 0; i< fft_p->size; i++ ){
                 in[i] = (double) buffer[i];
             }
             free(buffer);
             fft_pipe_state = fft_pipe_state - RUNTIME;
         } else {
-            fft_pipe_state = fft_pipe_state - RUNTIME;
+            //fft_pipe_state = fft_pipe_state - RUNTIME;
         }
     }
     if ( c == 0 ) {

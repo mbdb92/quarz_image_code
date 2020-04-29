@@ -12,12 +12,14 @@
 #define SHMEM_READ 4
 #define RUNTIME 8
 #define ALSA_DONE 16
+#define TERMINATE 32
 
 #define SHIFT_A_R 0
 #define SHIFT_F_R 1
 #define SHIFT_S_R 2
 #define SHIFT_R 3
 #define SHIFT_A_D 4
+#define SHIFT_T 5
 
 #define OK 0
 #define ERR 1
