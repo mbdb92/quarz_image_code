@@ -306,10 +306,10 @@ int alsa_handler( int pipefd[2], void *shmem ) {
         printf("(alsa) %i: Send SIGCONT to (fft) %i\n", pids->pid_alsa, pids->pid_fft_master);
 #endif
         }
-        if( testcount == 5 )
+        if( testcount == 10 )
             alsa_state += TERMINATE;
+        kill( pids->pid_fft_master, SIGCONT );
     }
-    kill( pids->pid_fft_master, SIGCONT );
 
     /*
      * Cleanup code

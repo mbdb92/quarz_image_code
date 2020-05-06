@@ -3,7 +3,7 @@
 
 #define DEVICE "default"
 #define CHANNEL_NUMBER 1
-#define RATE 44100u
+#define RATE 11025u
 #define FRAMES 32
 
 #define ZERO 0

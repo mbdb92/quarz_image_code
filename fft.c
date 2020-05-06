@@ -138,6 +138,7 @@ int fft_handler( int pipefd[2], void *shmem ) {
     }
 
     int c;
+    int nr = 0;
     while( (fft_pipe_state & RUNTIME) >> SHIFT_R ) {
         c = 0;
         c = fork();
@@ -155,6 +156,7 @@ int fft_handler( int pipefd[2], void *shmem ) {
             fft_pipe_state = fft_pipe_state - RUNTIME;
         } else {
             //fft_pipe_state = fft_pipe_state - RUNTIME;
+            nr++;
         }
     }
     if ( c == 0 ) {
@@ -169,7 +171,7 @@ int fft_handler( int pipefd[2], void *shmem ) {
 #ifdef WAND
     run_magick_from_fft( magick_p, fft_d, (unsigned long) fft_p->size );
 #else
-    run_magick_from_fft( fft_d, (unsigned long) fft_p->size );
+    run_magick_from_fft( fft_d, (unsigned long) fft_p->size, nr );
 #endif
 
     fftw_free(in);

@@ -12,7 +12,7 @@ LIBS_CORE_MAGICK = `pkg-config --cflags --libs MagickWand`
 LINK_ALSA = -I/usr/lib
 
 all: $(FILE)
-	$(CC) $(FILE) -o $(OBJ) $(CFLAGS) $(LIBS_ALSA) $(LIBS_FFT) $(LIBS_MAGICK)
+	$(CC) $(FILE) -o $(OBJ) $(CFLAGS) $(LIBS_ALSA) $(LIBS_FFT) $(LIBS_CORE_MAGICK) -v
 
 static: $(FILE)
 	$(CC) $(FILE) -o $(OBJ) $(CFLAGS) $(LIBS_STATIC) $(LIBS_ALSA) $(LIBS_FFT) $(LIBS_MAGICK) $(LINK_ALSA) -v -DPRINT_DEBUG

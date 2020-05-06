@@ -18,7 +18,7 @@ int run_magick_from_fft( struct magick_params *magick, struct fft_data *data, un
 int setup_drawing( char *path, struct magick_core_params *params );
 int destory_drawing( struct magick_core_params *params );
 
-int run_magick_from_fft( struct fft_data *data, unsigned long size );
+int run_magick_from_fft( struct fft_data *data, unsigned long size, int nr);
 #endif
 
 #endif //DRAWING_H

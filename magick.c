@@ -234,7 +234,7 @@ int destroy_drawing( struct magick_core_params *params ) {
     return OK;
 }
 
-int run_magick_from_fft( struct fft_data *fft_d, unsigned long size ) {
+int run_magick_from_fft( struct fft_data *fft_d, unsigned long size, int nr ) {
     struct magick_core_params *local_magick;
     struct timespec now;
     long divider, ms;
@@ -247,7 +247,8 @@ int run_magick_from_fft( struct fft_data *fft_d, unsigned long size ) {
     // >Setting the time as filename
     clock_gettime( CLOCK_REALTIME_COARSE, &now );
     ms = floor( now.tv_nsec / 1.0e3 );
-    sprintf( local_magick->path, "%i%03ld.jpg", (int) now.tv_sec, ms );
+    //sprintf( local_magick->path, "%i%03ld.jpg", (int) now.tv_sec, ms );
+    sprintf( local_magick->path, "%i.jpg", nr );
 
     rc = setup_drawing( &local_magick->path[0], local_magick );
 
