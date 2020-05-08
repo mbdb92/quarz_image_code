@@ -60,7 +60,7 @@ int main () {
     if( pids.pid_alsa == OK ) {
         int rc;
 
-        rc = alsa_handler( pipefd, shmem );
+//        rc = alsa_handler( pipefd, shmem );
 
     } else if( pids.pid_alsa == -1 ) {
         return E_FORK;
@@ -71,7 +71,8 @@ int main () {
         if( pids.pid_fft_master == OK ) {
             int rc;
 
-            rc = fft_handler( pipefd, shmem );
+            //rc = fft_handler( pipefd, shmem );
+            rc = fft_run( );
 
         } else if( pids.pid_fft_master == -1 ){
             return E_FORK;

@@ -190,3 +190,96 @@ int fft_handler( int pipefd[2], void *shmem ) {
     return OK;
 }
 
+int fft_run( ) {
+    struct fft_params *fft_p;
+    struct fft_data *fft_d;
+    double *in;
+    fftw_plan plan;
+    int rc;
+    void (*sig_handler_return) (int);
+
+    /*
+     * This block is needed for the state handling
+     * The sig handlers are needed for inter process 
+     * communication and the state for setup and
+     * during runtime
+     */
+    fft_p = malloc( sizeof(struct fft_params) );
+    fft_d = malloc( sizeof(struct fft_data) );
+    //plan = fftw_plan_dft_1d(fft_p->size, fft_d->fft_in, fft_d->fft_out, FFTW_FORWARD, FFTW_ESTIMATE);
+
+    /*
+     * Get pid of parrent to be ready to complet init step
+     * The wait for the signals to read the shared memory
+     * once done, send signal to alsa to run main loop
+     */
+
+    fft_p->size = 10000000;
+
+    /*
+     * This is currently needed, as using the fft_d->fft_in array doesn't work
+     * TODO: Fix error
+     */
+    rc = create_fft( fft_p, fft_d );
+    in = (double*) fftw_malloc(sizeof(fftw_complex) * fft_p->size);
+
+#ifdef WAND
+    rc = setup_drawing( magick_p );
+#endif
+
+    fft_p->plan = fftw_plan_r2r_1d(fft_p->size, in, fft_d->fft_out, FFTW_DHT, FFTW_ESTIMATE);
+
+    fft_pipe_state += RUNTIME;
+    /*
+     * Send SIGCONT to alsa, to start RUNTIME
+     */
+    int fd;
+    int c;
+    int nr = 0;
+    fd = open("output.raw", O_RDONLY);
+    while( (fft_pipe_state & RUNTIME) >> SHIFT_R ) {
+        c = 0;
+        c = fork();
+        if( c == 0 ) {
+            char *buffer;
+            buffer = malloc( fft_p->size * sizeof(char) );
+    //rc = read( pipefd[0], in, fft_p->size );
+            rc = pread( fd, buffer, (fft_p->size * sizeof(char) ), ((fft_p->size * sizeof(char)) * nr) );
+            if( rc < 1 )
+                exit(0);
+            for( int i = 0; i< fft_p->size; i++ ){
+                in[i] = (double) buffer[i];
+            }
+            free(buffer);
+            fft_pipe_state = fft_pipe_state - RUNTIME;
+        } else {
+            //fft_pipe_state = fft_pipe_state - RUNTIME;
+            nr++;
+        }
+    }
+    if ( c == 0 ) {
+    /*
+     * The previous created plan gets executed here
+     */
+    fftw_execute(fft_p->plan);
+#ifdef WAND
+    run_magick_from_fft( magick_p, fft_d, (unsigned long) fft_p->size );
+#else
+    run_magick_from_fft( fft_d, (unsigned long) fft_p->size, nr );
+#endif
+
+    fftw_free(in);
+#ifdef WAND
+    destroy_drawing( magick_p );
+    free(magick_p);
+#endif
+    destroy_fft( fft_p, fft_d );
+    free(fft_d);
+    free(fft_p);
+    } else {
+        wait();
+    }
+
+    return OK;
+}
+
