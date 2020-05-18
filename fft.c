@@ -24,7 +24,8 @@ struct sigaction fft_act;
  * This Function sets up the needed structs
  */
 int create_fft( struct fft_params *fft_p, struct fft_data *fft_d ) {
-    fft_p->size = SIZE;
+    // Not needed anymore as size gets transferd by alsa
+    //fft_p->size = SIZE;
     fft_p->rank = RANK;
     fft_d->fft_in = (double*) fftw_malloc(sizeof(fftw_complex) * fft_p->size);
     if (fft_d->fft_in == 0)
@@ -184,7 +185,7 @@ int fft_handler( int pipefd[2], void *shmem ) {
     free(fft_p);
     free(pids);
     } else {
-        wait();
+     //   wait();
     }
 
     return OK;
@@ -193,10 +194,11 @@ int fft_handler( int pipefd[2], void *shmem ) {
 int fft_run( ) {
     struct fft_params *fft_p;
     struct fft_data *fft_d;
-    double *in;
+    double *in, *out;
     fftw_plan plan;
     int rc;
     void (*sig_handler_return) (int);
+    FILE *gnuplot = popen("gnuplot -persistent", "w");
 
     /*
      * This block is needed for the state handling
@@ -214,19 +216,21 @@ int fft_run( ) {
      * once done, send signal to alsa to run main loop
      */
 
-    fft_p->size = 10000000;
+    fft_p->size = 800;
 
     /*
      * This is currently needed, as using the fft_d->fft_in array doesn't work
      * TODO: Fix error
      */
     rc = create_fft( fft_p, fft_d );
-    in = (double*) fftw_malloc(sizeof(fftw_complex) * fft_p->size);
+    in = (double*) fftw_malloc((sizeof(fftw_complex) * fft_p->size));
+    out = (double*) fftw_malloc((sizeof(fftw_complex) * fft_p->size));
 
 #ifdef WAND
     rc = setup_drawing( magick_p );
 #endif
 
+//    fft_p->plan = fftw_plan_r2r_1d(fft_p->size, in, fft_d->fft_out, FFTW_DHT, FFTW_ESTIMATE);
     fft_p->plan = fftw_plan_r2r_1d(fft_p->size, in, fft_d->fft_out, FFTW_DHT, FFTW_ESTIMATE);
 
     fft_pipe_state += RUNTIME;
@@ -236,28 +240,28 @@ int fft_run( ) {
     int fd;
     int c;
     int nr = 0;
-    fd = open("output.raw", O_RDONLY);
     while( (fft_pipe_state & RUNTIME) >> SHIFT_R ) {
         c = 0;
-        c = fork();
-        if( c == 0 ) {
-            char *buffer;
-            buffer = malloc( fft_p->size * sizeof(char) );
-    //rc = read( pipefd[0], in, fft_p->size );
-            rc = pread( fd, buffer, (fft_p->size * sizeof(char) ), ((fft_p->size * sizeof(char)) * nr) );
-            if( rc < 1 )
-                exit(0);
-            for( int i = 0; i< fft_p->size; i++ ){
-                in[i] = (double) buffer[i];
-            }
-            free(buffer);
-            fft_pipe_state = fft_pipe_state - RUNTIME;
-        } else {
-            //fft_pipe_state = fft_pipe_state - RUNTIME;
-            nr++;
+        short *buffer;
+        buffer = malloc( fft_p->size * sizeof(short) );
+        fd = open("output.raw", O_RDONLY);
+//rc = read( pipefd[0], in, fft_p->size );
+        //rc = pread( fd, buffer, (fft_p->size * sizeof(int) ), ((fft_p->size * sizeof(int)) * nr) );
+        //rc = pread( fd, buffer, (300*sizeof(short)) , (16* sizeof(short) * nr) );
+        rc = read( fd, buffer, (fft_p->size * sizeof(short)) );
+        //rc = pread( fd, &in[nr], (16*sizeof(short)) , (16* sizeof(short) * nr) );
+        if( rc < 1 )
+            exit(0);
+        for( int i = 0; i < fft_p->size; i++ ){
+            in[i] = (double) buffer[i] ;
+           // printf("%i\n",  buffer[i]);
+            printf("%f\n",  in[i] );
         }
+        free(buffer);
+        close(fd);
+        fft_pipe_state = fft_pipe_state - RUNTIME;
+        nr++;
     }
-    if ( c == 0 ) {
     /*
      * The previous created plan gets executed here
      */
@@ -268,7 +272,17 @@ int fft_run( ) {
     run_magick_from_fft( fft_d, (unsigned long) fft_p->size, nr );
 #endif
 
+    fprintf(gnuplot, "plot '-'\n");
+
+    for( int j = 0; j < fft_p->size; j++) {
+     //   printf("%f\n", fft_d->fft_out[j] );
+        fprintf(gnuplot, "%g %g\n", (double) j, fft_d->fft_out[j]);
+    }
+    fprintf(gnuplot, "e\n");
+    fflush(gnuplot);
+
     fftw_free(in);
+    fftw_free(out);
 #ifdef WAND
     destroy_drawing( magick_p );
     free(magick_p);
@@ -276,10 +290,8 @@ int fft_run( ) {
     destroy_fft( fft_p, fft_d );
     free(fft_d);
     free(fft_p);
-    } else {
-        wait();
-    }
 
+    printf("fft done\n");
     return OK;
 }
 

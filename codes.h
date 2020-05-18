@@ -6,6 +6,10 @@
 #define RATE 11025u
 #define FRAMES 32
 
+#define PI 3.14159
+#define RANK 1
+#define SIZE 360
+
 #define ZERO 0
 #define ALSA_READY 1
 #define FFT_READY 2

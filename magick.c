@@ -213,8 +213,8 @@ int setup_drawing( char *path, struct magick_core_params *params ) {
     MagickCoreGenesis( dir, MagickTrue );
     params->exception = AcquireExceptionInfo();
     params->image_info = AcquireImageInfo();
-    //params->image_info = CloneImageInfo( (ImageInfo *) NULL );
-    GetImageInfo( params->image_info );
+    params->image_info = CloneImageInfo( (ImageInfo *) NULL );
+//    GetImageInfo( params->image_info );
 
     (void) strcpy( params->image_info->filename, path );
 
@@ -256,11 +256,11 @@ int run_magick_from_fft( struct fft_data *fft_d, unsigned long size, int nr ) {
     // suaber auf den Farbraum runterzurechnen wird hier ein Faktor genommen, 
     // der den Max. Hub beschreibt
     find_min_max( fft_d->fft_out, &local_magick->max, &local_magick->min, size );
-    if( local_magick->min < 0 )
-        divider = (local_magick->max - local_magick->min) /BYTE_SIZE;
+    printf("%li, %li\n", local_magick->min, local_magick->max);
+    divider = (local_magick->max - local_magick->min) /BYTE_SIZE;
     
     for( int i = 0; i < size; i++ ) {
-        color = (int)( ((long) fabs(fft_d->fft_out[i]) + local_magick->min) / divider );
+        color = (int)( ((long) fabs(fft_d->fft_out[i]) - local_magick->min) / divider );
 
         /*
          * This part transforms the input into an char string
@@ -268,30 +268,33 @@ int run_magick_from_fft( struct fft_data *fft_d, unsigned long size, int nr ) {
          * TODO couldn't be the type int be used?
          */
         sprintf( local_magick->color, "%x", color );
-        len = strlen( local_magick -> color );
+        len = strlen( local_magick->color );
+        printf("%s\n", local_magick->color );
         switch( len ) {
             case 6:
-                sprintf( &local_magick->pixels[i], "#%x", color );
+                sprintf( &local_magick->pixels[i], "%x", color );
                 break;
             case 5:
-                sprintf( &local_magick->pixels[i], "#0%x", color );
+                sprintf( &local_magick->pixels[i], "0%x", color );
                 break;
             case 4:
-                sprintf( &local_magick->pixels[i], "#00%x", color );
+                sprintf( &local_magick->pixels[i], "FF%x", color );
                 break;
             case 3:
-                sprintf( &local_magick->pixels[i], "#000%x", color );
+                sprintf( &local_magick->pixels[i], "FF0%x", color );
                 break;
             case 2:
-                sprintf( &local_magick->pixels[i], "#0000%x", color );
+                sprintf( &local_magick->pixels[i], "FFFF%x", color );
                 break;
             case 1:
-                sprintf( &local_magick->pixels[i], "#00000%x", color );
+                sprintf( &local_magick->pixels[i], "FFFF0%x", color );
                 break;
             default:
-                sprintf( &local_magick->pixels[i], "#000000" );
+                sprintf( &local_magick->pixels[i], "FFFFFF" );
                 break;
         }
+        printf("%s\n", &local_magick->pixels[i] );
+        printf("%i\n", color );
     }
 
     local_magick->image = ConstituteImage(X_SIZE, size, "RGB", CharPixel, local_magick->pixels, local_magick->exception );
@@ -299,8 +302,17 @@ int run_magick_from_fft( struct fft_data *fft_d, unsigned long size, int nr ) {
     printf("(magick): consituting image done\n");
 #endif
 
+    printf("Done building image\n");
+    int fd = open("data.raw", O_WRONLY);
+    char data = malloc( size * sizeof(char) * 4 );
+    data = ReadImage( local_magick->image_info, local_magick->exception );
+    write( fd, data, (size * sizeof(char) * 4));
+    close(fd);
+    printf("Done writing data\n");
+
     //WriteImage( local_magick->image_info, local_magick->image, local_magick->exception );
     WriteImages( local_magick->image_info, local_magick->image, local_magick->path, local_magick->exception );
+    printf("Done writing image\n");
 
     destroy_drawing( local_magick );
     free(local_magick->pixels);
