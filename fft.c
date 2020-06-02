@@ -15,7 +15,15 @@
 #include <unistd.h>
 #include "sighandler.h"
 // To access magick runtime
+#ifdef CORE
 #include "magick.h"
+#endif
+#ifdef WAND
+#include "magick.h"
+#endif
+#ifdef PPM
+#include "magick.h"
+#endif
 
 #include "fft.h"
 
@@ -171,9 +179,13 @@ int fft_handler( int pipefd[2], void *shmem ) {
     fftw_execute(fft_p->plan);
 #ifdef WAND
     run_magick_from_fft( magick_p, fft_d, (unsigned long) fft_p->size );
-#else
+#endif
+#ifdef CORE
     run_magick_from_fft( fft_d, (unsigned long) fft_p->size, nr );
 #endif
+#ifdef PPM
+    run_ppm_from_fft( fft_d, (unsigned long) fft_p->size, nr );
+#endif    
 
     fftw_free(in);
 #ifdef WAND
@@ -240,11 +252,11 @@ int fft_run( ) {
     int fd;
     int c;
     int nr = 0;
+    short *buffer;
+    fd = open("output.raw", O_RDONLY);
+        buffer = malloc( fft_p->size * sizeof(short) );
     while( (fft_pipe_state & RUNTIME) >> SHIFT_R ) {
         c = 0;
-        short *buffer;
-        buffer = malloc( fft_p->size * sizeof(short) );
-        fd = open("output.raw", O_RDONLY);
 //rc = read( pipefd[0], in, fft_p->size );
         //rc = pread( fd, buffer, (fft_p->size * sizeof(int) ), ((fft_p->size * sizeof(int)) * nr) );
         //rc = pread( fd, buffer, (300*sizeof(short)) , (16* sizeof(short) * nr) );
@@ -257,20 +269,27 @@ int fft_run( ) {
            // printf("%i\n",  buffer[i]);
             printf("%f\n",  in[i] );
         }
-        free(buffer);
-        close(fd);
-        fft_pipe_state = fft_pipe_state - RUNTIME;
         nr++;
+        fftw_execute(fft_p->plan);
+#ifdef WAND
+        run_magick_from_fft( magick_p, fft_d, (unsigned long) fft_p->size );
+#endif
+#ifdef CORE
+        run_magick_from_fft( fft_d, (unsigned long) fft_p->size, nr );
+#endif
+#ifdef PPM
+        run_ppm_from_fft( fft_d, (unsigned long) fft_p->size, nr );
+#endif    
+        if(nr == 20){
+            fft_pipe_state = fft_pipe_state - RUNTIME;
+        }
+
     }
+    free(buffer);
+    close(fd);
     /*
      * The previous created plan gets executed here
      */
-    fftw_execute(fft_p->plan);
-#ifdef WAND
-    run_magick_from_fft( magick_p, fft_d, (unsigned long) fft_p->size );
-#else
-    run_magick_from_fft( fft_d, (unsigned long) fft_p->size, nr );
-#endif
 
     fprintf(gnuplot, "plot '-'\n");
 

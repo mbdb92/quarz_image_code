@@ -10,6 +10,12 @@
 #define RANK 1
 #define SIZE 360
 
+#define X_CORD 0
+#define X_SIZE 1
+#define BYTE_SIZE 255
+#define HEX_MAX 16
+#define HEX_MIN 0
+
 #define ZERO 0
 #define ALSA_READY 1
 #define FFT_READY 2

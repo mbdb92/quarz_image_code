@@ -10,7 +10,8 @@
 // For magick
 #ifdef WAND
 #include <MagickWand/MagickWand.h>
-#else
+#endif
+#ifdef CORE
 #include <MagickCore/MagickCore.h>
 #endif
 
@@ -56,7 +57,8 @@ struct magick_params {
     long max;
     long min;
 };
-#else
+#endif
+#ifdef CORE
 struct magick_core_params {
     ExceptionInfo *exception;
     Image *image;
@@ -66,6 +68,16 @@ struct magick_core_params {
     char color[8];
     long max;
     long min;
+};
+#endif
+#ifdef PPM
+struct ppm_params {
+    char path[50];
+    long max;
+    long min;
+    unsigned int color;
+    long divider;
+    FILE *fd;
 };
 #endif
 

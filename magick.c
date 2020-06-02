@@ -31,6 +31,10 @@ int find_min_max( double *data, long *max, long *min, unsigned long size ) {
     *min = 0;
 
     for( int i = 0; i < size; i++ ){
+        if( i < 20 )
+            data[i] = 0.0;
+        if( i > (size - 20) )
+            data[i] = 0.0;
         if( (long) fabs(data[i]) > *max )
             *max = (long) fabs(data[i]);
 
@@ -203,7 +207,8 @@ int run_magick_from_fft( struct magick_params *magick, struct fft_data *fft_d, u
     return OK;
 }
 
-#else //If not definde Wand
+#endif
+#ifdef CORE
 
 int setup_drawing( char *path, struct magick_core_params *params ) {
     // Filename Max gets defined by stdio.h
@@ -240,9 +245,11 @@ int run_magick_from_fft( struct fft_data *fft_d, unsigned long size, int nr ) {
     long divider, ms;
     unsigned int color;
     int rc, len;
+    char *pixels;
 
     local_magick = malloc( sizeof(struct magick_core_params) );
     local_magick->pixels = malloc( size * sizeof(char) );
+    pixels = (char*) malloc( size * sizeof(char) );
 
     // >Setting the time as filename
     clock_gettime( CLOCK_REALTIME_COARSE, &now );
@@ -258,6 +265,10 @@ int run_magick_from_fft( struct fft_data *fft_d, unsigned long size, int nr ) {
     find_min_max( fft_d->fft_out, &local_magick->max, &local_magick->min, size );
     printf("%li, %li\n", local_magick->min, local_magick->max);
     divider = (local_magick->max - local_magick->min) /BYTE_SIZE;
+
+    // To create ppm file
+    FILE *fd = fopen("data_p3.ppm", "w+");
+    fprintf( fd, "P3\n%i %i\n%i\n", X_SIZE, (int) size, BYTE_SIZE );
     
     for( int i = 0; i < size; i++ ) {
         color = (int)( ((long) fabs(fft_d->fft_out[i]) - local_magick->min) / divider );
@@ -278,36 +289,38 @@ int run_magick_from_fft( struct fft_data *fft_d, unsigned long size, int nr ) {
                 sprintf( &local_magick->pixels[i], "0%x", color );
                 break;
             case 4:
-                sprintf( &local_magick->pixels[i], "FF%x", color );
+                sprintf( &local_magick->pixels[i], "00%x", color );
                 break;
             case 3:
-                sprintf( &local_magick->pixels[i], "FF0%x", color );
+                sprintf( &local_magick->pixels[i], "000%x", color );
                 break;
             case 2:
-                sprintf( &local_magick->pixels[i], "FFFF%x", color );
+                sprintf( &local_magick->pixels[i], "0000%x", color );
+                fprintf( fd, "0 %i 0\n", color );
                 break;
             case 1:
-                sprintf( &local_magick->pixels[i], "FFFF0%x", color );
+                sprintf( &local_magick->pixels[i], "00000%x", color );
+                fprintf( fd, "0 %i 0\n", color );
                 break;
             default:
-                sprintf( &local_magick->pixels[i], "FFFFFF" );
+                sprintf( &local_magick->pixels[i], "000000" );
+                fprintf( fd, "0 0 0 \n" );
                 break;
         }
         printf("%s\n", &local_magick->pixels[i] );
         printf("%i\n", color );
     }
 
-    local_magick->image = ConstituteImage(X_SIZE, size, "RGB", CharPixel, local_magick->pixels, local_magick->exception );
+//    local_magick->image = ConstituteImage(X_SIZE, size, "RGB", CharPixel, local_magick->pixels, local_magick->exception );
+    local_magick->image = BlobToImage(local_magick->image_info, local_magick->pixels, size, local_magick->exception );
+    CatchException(local_magick->exception);
 #ifdef PRINT_DEBUG
     printf("(magick): consituting image done\n");
 #endif
 
     printf("Done building image\n");
-    int fd = open("data.raw", O_WRONLY);
-    char data = malloc( size * sizeof(char) * 4 );
-    data = ReadImage( local_magick->image_info, local_magick->exception );
-    write( fd, data, (size * sizeof(char) * 4));
-    close(fd);
+    // Test ppm needs to be closed
+    fclose(fd);
     printf("Done writing data\n");
 
     //WriteImage( local_magick->image_info, local_magick->image, local_magick->exception );
@@ -317,6 +330,38 @@ int run_magick_from_fft( struct fft_data *fft_d, unsigned long size, int nr ) {
     destroy_drawing( local_magick );
     free(local_magick->pixels);
     free(local_magick);
+    return OK;
+} 
+
+#endif
+#ifdef PPM
+
+int run_ppm_from_fft( struct fft_data *fft_d, unsigned long size, int nr ) {
+    struct ppm_params *ppm;
+
+    ppm = malloc( sizeof(struct ppm_params) );
+
+    sprintf( ppm->path, "%i.ppm", nr );
+
+    // Um die double werte, die hier eh schon convertiert zu long sid, aus fft
+    // suaber auf den Farbraum runterzurechnen wird hier ein Faktor genommen, 
+    // der den Max. Hub beschreibt
+    find_min_max( fft_d->fft_out, &ppm->max, &ppm->min, size );
+    printf("%li, %li\n", ppm->min, ppm->max);
+    ppm->divider = (ppm->max - ppm->min) /BYTE_SIZE;
+
+    // To create ppm file
+    ppm->fd = fopen(ppm->path, "w+");
+    fprintf( ppm->fd, "P3\n%i %i\n%i\n", X_SIZE, (int) size, BYTE_SIZE );
+    
+    for( int i = 0; i < size; i++ ) {
+        ppm->color = (int)( ((long) fabs(fft_d->fft_out[i]) - ppm->min) / ppm->divider );
+        fprintf( ppm->fd, "0 %i 0\n", ppm->color );
+    }
+
+    fclose(ppm->fd);
+
+    free(ppm);
     return OK;
 } 
 

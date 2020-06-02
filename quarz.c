@@ -60,7 +60,7 @@ int main () {
     if( pids.pid_alsa == OK ) {
         int rc;
 
-//        rc = alsa_handler( pipefd, shmem );
+        //rc = alsa_handler( pipefd, shmem );
 
     } else if( pids.pid_alsa == -1 ) {
         return E_FORK;

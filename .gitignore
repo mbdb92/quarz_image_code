@@ -1,3 +1,4 @@
 *.out
 output.raw
 *.jpg
+*.ppm
