@@ -31,9 +31,9 @@ int find_min_max( double *data, long *max, long *min, unsigned long size ) {
     *min = 0;
 
     for( int i = 0; i < size; i++ ){
-        if( i < 20 )
-            data[i] = 0.0;
-        if( i > (size - 20) )
+          if( i > (size / 2) )
+//        if( i > (size - 20) )
+//        if( i > 2400 )
             data[i] = 0.0;
         if( (long) fabs(data[i]) > *max )
             *max = (long) fabs(data[i]);
@@ -352,9 +352,9 @@ int run_ppm_from_fft( struct fft_data *fft_d, unsigned long size, int nr ) {
 
     // To create ppm file
     ppm->fd = fopen(ppm->path, "w+");
-    fprintf( ppm->fd, "P3\n%i %i\n%i\n", X_SIZE, (int) size, BYTE_SIZE );
+    fprintf( ppm->fd, "P3\n%i %i\n%i\n", X_SIZE, (int) (size / 2), BYTE_SIZE );
     
-    for( int i = 0; i < size; i++ ) {
+    for( int i = 0; i < (size / 2); i++ ) {
         ppm->color = (int)( ((long) fabs(fft_d->fft_out[i]) - ppm->min) / ppm->divider );
         fprintf( ppm->fd, "0 %i 0\n", ppm->color );
     }

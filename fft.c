@@ -203,14 +203,14 @@ int fft_handler( int pipefd[2], void *shmem ) {
     return OK;
 }
 
-int fft_run( ) {
+int fft_run( char *filename ) {
     struct fft_params *fft_p;
     struct fft_data *fft_d;
     double *in, *out;
     fftw_plan plan;
     int rc;
     void (*sig_handler_return) (int);
-    FILE *gnuplot = popen("gnuplot -persistent", "w");
+//    FILE *gnuplot = popen("gnuplot -persistent", "w");
 
     /*
      * This block is needed for the state handling
@@ -228,7 +228,7 @@ int fft_run( ) {
      * once done, send signal to alsa to run main loop
      */
 
-    fft_p->size = 800;
+    fft_p->size = SAMPLERATE;
 
     /*
      * This is currently needed, as using the fft_d->fft_in array doesn't work
@@ -253,21 +253,25 @@ int fft_run( ) {
     int c;
     int nr = 0;
     short *buffer;
-    fd = open("output.raw", O_RDONLY);
+    fd = open(filename, O_RDONLY);
         buffer = malloc( fft_p->size * sizeof(short) );
     while( (fft_pipe_state & RUNTIME) >> SHIFT_R ) {
         c = 0;
 //rc = read( pipefd[0], in, fft_p->size );
         //rc = pread( fd, buffer, (fft_p->size * sizeof(int) ), ((fft_p->size * sizeof(int)) * nr) );
         //rc = pread( fd, buffer, (300*sizeof(short)) , (16* sizeof(short) * nr) );
-        rc = read( fd, buffer, (fft_p->size * sizeof(short)) );
+        //rc = read( fd, buffer, (fft_p->size * sizeof(short)) );
+        rc = read( fd, buffer, (INPUT_SIZE * sizeof(short)) );
         //rc = pread( fd, &in[nr], (16*sizeof(short)) , (16* sizeof(short) * nr) );
         if( rc < 1 )
             exit(0);
-        for( int i = 0; i < fft_p->size; i++ ){
+        for( int i = 0; i < INPUT_SIZE; i++ ){
             in[i] = (double) buffer[i] ;
            // printf("%i\n",  buffer[i]);
             printf("%f\n",  in[i] );
+        }
+        for( int i = INPUT_SIZE; i < fft_p->size; i++ ){
+            in[i] = 0.0;
         }
         nr++;
         fftw_execute(fft_p->plan);
@@ -280,7 +284,7 @@ int fft_run( ) {
 #ifdef PPM
         run_ppm_from_fft( fft_d, (unsigned long) fft_p->size, nr );
 #endif    
-        if(nr == 20){
+        if(nr == 1000){
             fft_pipe_state = fft_pipe_state - RUNTIME;
         }
 
@@ -291,6 +295,7 @@ int fft_run( ) {
      * The previous created plan gets executed here
      */
 
+/* GNUPLOT
     fprintf(gnuplot, "plot '-'\n");
 
     for( int j = 0; j < fft_p->size; j++) {
@@ -299,6 +304,7 @@ int fft_run( ) {
     }
     fprintf(gnuplot, "e\n");
     fflush(gnuplot);
+*/
 
     fftw_free(in);
     fftw_free(out);

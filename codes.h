@@ -6,6 +6,9 @@
 #define RATE 11025u
 #define FRAMES 32
 
+#define SAMPLERATE 48000
+#define INPUT_SIZE 2400
+
 #define PI 3.14159
 #define RANK 1
 #define SIZE 360

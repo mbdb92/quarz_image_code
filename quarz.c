@@ -70,9 +70,15 @@ int main () {
         pids.pid_fft_master = fork();
         if( pids.pid_fft_master == OK ) {
             int rc;
+            char *filename;
+
+            filename = (char *) malloc( 100 * sizeof(char) );
+            strcpy( filename, "output.raw" );
 
             //rc = fft_handler( pipefd, shmem );
-            rc = fft_run( );
+            rc = fft_run( filename );
+
+            free( filename );
 
         } else if( pids.pid_fft_master == -1 ){
             return E_FORK;
