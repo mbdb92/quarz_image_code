@@ -20,7 +20,12 @@
 
 struct sigaction quarz_act;
 
+#ifdef LIVE /* LIVE */
 int main () {
+#endif /* LIVE */
+#ifdef RECORDED /* RECORDED */
+int main ( int argc, char *argv[] ) {
+#endif /* RECORDED */
     int pipefd[2];
     int return_value, status;
     struct pid_collection pids;
@@ -79,7 +84,10 @@ int main () {
             char *filename;
 
             filename = (char *) malloc( 100 * sizeof(char) );
-            strcpy( filename, "output.raw" );
+            if( argc == 2 )
+                strcpy( filename, argv[1] );
+            else
+                return E_ARGS;
 
             rc = fft_run( filename );
 #endif /* RECORDED */

@@ -39,6 +39,7 @@
 #define E_SIGH_QUARZ 1
 #define E_PIPE 2
 #define E_FORK 3
+#define E_ARGS 4
 
 #define E_MAL_FFT_IN 1
 #define E_MAL_FFT_OUT 2
