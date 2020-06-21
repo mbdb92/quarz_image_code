@@ -33,7 +33,9 @@ struct sigaction fft_act;
  */
 int create_fft( struct fft_params *fft_p, struct fft_data *fft_d ) {
     // Not needed anymore as size gets transferd by alsa
-    //fft_p->size = SIZE;
+#ifdef RECORDED /* RECORDED */
+    fft_p->size = SAMPLERATE;
+#endif /* RECORDED */
     fft_p->rank = RANK;
     fft_d->fft_in = (double*) fftw_malloc(sizeof(fftw_complex) * fft_p->size);
     if (fft_d->fft_in == 0)
@@ -42,8 +44,6 @@ int create_fft( struct fft_params *fft_p, struct fft_data *fft_d ) {
     if (fft_d->fft_out == 0)
         return E_MAL_FFT_OUT;
 
-    //fft_p->plan = fftw_plan_dft_1d(fft_p->size, fft_d->fft_in, fft_d->fft_out, FFTW_FORWARD, FFTW_ESTIMATE);
-//    fft_p->plan = fftw_plan_r2r_1d(fft_p->size, fft_d->fft_in, fft_d->fft_out, FFTW_DHT, FFTW_ESTIMATE);
     if (fft_p->plan == NULL)
         return E_ADD_FFT_PLAN;
     return OK;
@@ -56,19 +56,25 @@ int destroy_fft( struct fft_params *fft_p, struct fft_data *fft_d ) {
     return OK;
 }
 
-
+#ifdef LIVE /* LIVE */
 int fft_handler( int pipefd[2], void *shmem ) {
     struct pid_collection *pids;
-    struct fft_params *fft_p;
-    struct fft_data *fft_d;
 #ifdef WAND
     struct magick_params *magick_p;
-#endif
+#endif /* WAND */
     double *in;
+    void (*sig_handler_return) (int);
+#endif /* LIVE */
+#ifdef RECORDED /* RECORDED */
+int fft_run( char *filename ) {
+    double *in, *out;
+#endif /* RECORDED */
+    struct fft_params *fft_p;
+    struct fft_data *fft_d;
     fftw_plan plan;
     int rc;
-    void (*sig_handler_return) (int);
-
+//    FILE *gnuplot = popen("gnuplot -persistent", "w");
+#ifdef LIVE /* LIVE */
     /*
      * This block is needed for the state handling
      * The sig handlers are needed for inter process 
@@ -84,25 +90,25 @@ int fft_handler( int pipefd[2], void *shmem ) {
 
     sigaction( SIGUSR1, &fft_act, 0 );
     sigaction( SIGCONT, &fft_act, 0 );
-
     /* 
      * The needed structs
      */
     pids = malloc( sizeof(struct pid_collection) );
-    fft_p = malloc( sizeof(struct fft_params) );
-    fft_d = malloc( sizeof(struct fft_data) );
 #ifdef WAND
     magick_p = malloc( sizeof(struct magick_params) );
-#endif
-    //plan = fftw_plan_dft_1d(fft_p->size, fft_d->fft_in, fft_d->fft_out, FFTW_FORWARD, FFTW_ESTIMATE);
-
+#endif /* WAND */
     close( pipefd[1] );
+#endif /* LIVE */
+
+    fft_p = malloc( sizeof(struct fft_params) );
+    fft_d = malloc( sizeof(struct fft_data) );
+
+#ifdef LIVE /*LIVE */
     /*
      * Get pid of parrent to be ready to complet init step
      * The wait for the signals to read the shared memory
      * once done, send signal to alsa to run main loop
      */
-
     kill( getppid(), SIGUSR2 );
 
     if( !((fft_pipe_state & SHMEM_READ) >> SHIFT_S_R) ) {
@@ -113,16 +119,20 @@ int fft_handler( int pipefd[2], void *shmem ) {
     }
     memcpy( pids, shmem, sizeof(struct pid_collection) );
     memcpy( &fft_p->size, &shmem[ sizeof(struct pid_collection) ], sizeof(fft_p->size) );
-
 #ifdef PRINT_DEBUG
     printf("(fft) %i: read from shmem: %i, %i, %i, %i \n", pids->pid_fft_master, pids->pid_quarz, pids->pid_alsa, pids->pid_fft_master, fft_p->size);
 #endif
+#endif /* LIVE */
+
     /*
      * This is currently needed, as using the fft_d->fft_in array doesn't work
      * TODO: Fix error
      */
     rc = create_fft( fft_p, fft_d );
-    in = (double*) fftw_malloc(sizeof(fftw_complex) * fft_p->size);
+    in = (double*) fftw_malloc((sizeof(fftw_complex) * fft_p->size));
+#ifdef RECORDED /* RECORDED */
+    out = (double*) fftw_malloc((sizeof(fftw_complex) * fft_p->size));
+#endif /* RECORDED */
 
 #ifdef WAND
     rc = setup_drawing( magick_p );
@@ -131,6 +141,8 @@ int fft_handler( int pipefd[2], void *shmem ) {
     fft_p->plan = fftw_plan_r2r_1d(fft_p->size, in, fft_d->fft_out, FFTW_DHT, FFTW_ESTIMATE);
 
     fft_pipe_state += RUNTIME;
+
+#ifdef LIVE /* LIVE */
     /*
      * Send SIGCONT to alsa, to start RUNTIME
      */
@@ -145,16 +157,25 @@ int fft_handler( int pipefd[2], void *shmem ) {
 #endif
         suspend( &fft_pipe_state, ALSA_DONE, SHIFT_A_D );
     }
+#endif /* LIVE */
 
-    int c;
     int nr = 0;
+#ifdef LIVE /* LIVE */
+    int c;
+#endif /* LIVE */
+#ifdef RECORDED /* RECORDED */
+    int fd;
+    short *buffer;
+    fd = open(filename, O_RDONLY);
+    buffer = malloc( fft_p->size * sizeof(short) );
+#endif /* RECORDED */
     while( (fft_pipe_state & RUNTIME) >> SHIFT_R ) {
+#ifdef LIVE /* LIVE */
         c = 0;
         c = fork();
         if( c == 0 ) {
             long *buffer;
             buffer = malloc( fft_p->size * sizeof(long) );
-    //rc = read( pipefd[0], in, fft_p->size );
             rc = read( pipefd[0], buffer, (fft_p->size * sizeof(long) ));
             if( rc < 1 )
                 exit(0);
@@ -164,110 +185,16 @@ int fft_handler( int pipefd[2], void *shmem ) {
             free(buffer);
             fft_pipe_state = fft_pipe_state - RUNTIME;
         } else {
-            //fft_pipe_state = fft_pipe_state - RUNTIME;
             nr++;
         }
     }
-    if ( c == 0 ) {
-#ifdef PRINT_DEBUG
-    printf("(fft) %i: read %i from pipe\n", pids->pid_fft_master, rc);
-#endif
-    
-    /*
-     * The previous created plan gets executed here
-     */
-    fftw_execute(fft_p->plan);
-#ifdef WAND
-    run_magick_from_fft( magick_p, fft_d, (unsigned long) fft_p->size );
-#endif
-#ifdef CORE
-    run_magick_from_fft( fft_d, (unsigned long) fft_p->size, nr );
-#endif
-#ifdef PPM
-    run_ppm_from_fft( fft_d, (unsigned long) fft_p->size, nr );
-#endif    
-
-    fftw_free(in);
-#ifdef WAND
-    destroy_drawing( magick_p );
-    free(magick_p);
-#endif
-    destroy_fft( fft_p, fft_d );
-    free(fft_d);
-    free(fft_p);
-    free(pids);
-    } else {
-     //   wait();
-    }
-
-    return OK;
-}
-
-int fft_run( char *filename ) {
-    struct fft_params *fft_p;
-    struct fft_data *fft_d;
-    double *in, *out;
-    fftw_plan plan;
-    int rc;
-    void (*sig_handler_return) (int);
-//    FILE *gnuplot = popen("gnuplot -persistent", "w");
-
-    /*
-     * This block is needed for the state handling
-     * The sig handlers are needed for inter process 
-     * communication and the state for setup and
-     * during runtime
-     */
-    fft_p = malloc( sizeof(struct fft_params) );
-    fft_d = malloc( sizeof(struct fft_data) );
-    //plan = fftw_plan_dft_1d(fft_p->size, fft_d->fft_in, fft_d->fft_out, FFTW_FORWARD, FFTW_ESTIMATE);
-
-    /*
-     * Get pid of parrent to be ready to complet init step
-     * The wait for the signals to read the shared memory
-     * once done, send signal to alsa to run main loop
-     */
-
-    fft_p->size = SAMPLERATE;
-
-    /*
-     * This is currently needed, as using the fft_d->fft_in array doesn't work
-     * TODO: Fix error
-     */
-    rc = create_fft( fft_p, fft_d );
-    in = (double*) fftw_malloc((sizeof(fftw_complex) * fft_p->size));
-    out = (double*) fftw_malloc((sizeof(fftw_complex) * fft_p->size));
-
-#ifdef WAND
-    rc = setup_drawing( magick_p );
-#endif
-
-//    fft_p->plan = fftw_plan_r2r_1d(fft_p->size, in, fft_d->fft_out, FFTW_DHT, FFTW_ESTIMATE);
-    fft_p->plan = fftw_plan_r2r_1d(fft_p->size, in, fft_d->fft_out, FFTW_DHT, FFTW_ESTIMATE);
-
-    fft_pipe_state += RUNTIME;
-    /*
-     * Send SIGCONT to alsa, to start RUNTIME
-     */
-    int fd;
-    int c;
-    int nr = 0;
-    short *buffer;
-    fd = open(filename, O_RDONLY);
-        buffer = malloc( fft_p->size * sizeof(short) );
-    while( (fft_pipe_state & RUNTIME) >> SHIFT_R ) {
-        c = 0;
-//rc = read( pipefd[0], in, fft_p->size );
-        //rc = pread( fd, buffer, (fft_p->size * sizeof(int) ), ((fft_p->size * sizeof(int)) * nr) );
-        //rc = pread( fd, buffer, (300*sizeof(short)) , (16* sizeof(short) * nr) );
-        //rc = read( fd, buffer, (fft_p->size * sizeof(short)) );
+#endif /* LIVE */
+#ifdef RECORDED /* RECORDED */
         rc = read( fd, buffer, (INPUT_SIZE * sizeof(short)) );
-        //rc = pread( fd, &in[nr], (16*sizeof(short)) , (16* sizeof(short) * nr) );
         if( rc < 1 )
             exit(0);
         for( int i = 0; i < INPUT_SIZE; i++ ){
             in[i] = (double) buffer[i] ;
-           // printf("%i\n",  buffer[i]);
             printf("%f\n",  in[i] );
         }
         for( int i = INPUT_SIZE; i < fft_p->size; i++ ){
@@ -287,13 +214,49 @@ int fft_run( char *filename ) {
         if(nr == 1000){
             fft_pipe_state = fft_pipe_state - RUNTIME;
         }
-
     }
-    free(buffer);
-    close(fd);
+#endif /* RECORDED */
+#ifdef LIVE /* LIVE */
+    if ( c == 0 ) {
+#ifdef PRINT_DEBUG
+    printf("(fft) %i: read %i from pipe\n", pids->pid_fft_master, rc);
+#endif
+    
     /*
      * The previous created plan gets executed here
      */
+    fftw_execute(fft_p->plan);
+#ifdef WAND
+    run_magick_from_fft( magick_p, fft_d, (unsigned long) fft_p->size );
+#endif
+#ifdef CORE
+    run_magick_from_fft( fft_d, (unsigned long) fft_p->size, nr );
+#endif
+#ifdef PPM
+    run_ppm_from_fft( fft_d, (unsigned long) fft_p->size, nr );
+#endif    
+
+#endif /* LIVE */
+
+    fftw_free(in);
+#ifdef WAND
+    destroy_drawing( magick_p );
+    free(magick_p);
+#endif
+    destroy_fft( fft_p, fft_d );
+    free(fft_d);
+    free(fft_p);
+
+#ifdef LIVE
+    free(pids);
+    } else {
+     //   wait();
+    }
+#endif /* LIVE */
+
+#ifdef RECORDED /* RECORDED */
+    free(buffer);
+    close(fd);
 
 /* GNUPLOT
     fprintf(gnuplot, "plot '-'\n");
@@ -306,17 +269,9 @@ int fft_run( char *filename ) {
     fflush(gnuplot);
 */
 
-    fftw_free(in);
     fftw_free(out);
-#ifdef WAND
-    destroy_drawing( magick_p );
-    free(magick_p);
-#endif
-    destroy_fft( fft_p, fft_d );
-    free(fft_d);
-    free(fft_p);
+#endif /* RECORDED */
 
-    printf("fft done\n");
     return OK;
 }
 

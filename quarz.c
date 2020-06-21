@@ -55,28 +55,34 @@ int main () {
      */
     shmem = mmap( NULL, (sizeof(pids) + sizeof(int)), protection, visibility, -1, 0 );
 
+#ifdef LIVE /* LIVE */
     // Forking for alsa
     pids.pid_alsa = fork();
     if( pids.pid_alsa == OK ) {
         int rc;
 
-        //rc = alsa_handler( pipefd, shmem );
+        rc = alsa_handler( pipefd, shmem );
 
     } else if( pids.pid_alsa == -1 ) {
         return E_FORK;
     // quarz continues here
     } else {
+#endif /* LIVE */
         // Fork for fft handler
         pids.pid_fft_master = fork();
         if( pids.pid_fft_master == OK ) {
             int rc;
+#ifdef LIVE /* LIVE */
+            rc = fft_handler( pipefd, shmem );
+#endif /* LIVE */
+#ifdef RECORDED /* RECORDED */
             char *filename;
 
             filename = (char *) malloc( 100 * sizeof(char) );
             strcpy( filename, "output.raw" );
 
-            //rc = fft_handler( pipefd, shmem );
             rc = fft_run( filename );
+#endif /* RECORDED */
 
             free( filename );
 
@@ -129,7 +135,9 @@ int main () {
             } while( !WIFEXITED(status) );
 
         }
+#ifdef LIVE /* LIVE */
     }
+#endif /* LIVE */
 
     return OK;
 }
