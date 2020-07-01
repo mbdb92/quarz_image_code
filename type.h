@@ -48,6 +48,14 @@ struct fft_data {
     double *fft_out;
 };
 
+struct wav_header {
+    int file_size;
+    short format_type;
+    short channel_number;
+    int sample_rate;
+    short bits_per_sample;
+};
+
 #ifdef WAND
 struct magick_params {
     MagickWand *m_wand;

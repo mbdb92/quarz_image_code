@@ -6,8 +6,12 @@
 #define RATE 11025u
 #define FRAMES 32
 
-#define SAMPLERATE 48000
-#define INPUT_SIZE 2400
+#define SAMPLERATE 16000
+#define INPUT_SIZE 320
+#define TIMEFRAME_DIVISOR 100
+
+#define PPM_MAX 2400
+#define WAV_HEADER_SIZE 44
 
 #define PI 3.14159
 #define RANK 1

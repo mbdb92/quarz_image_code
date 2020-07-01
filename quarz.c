@@ -111,6 +111,7 @@ int main ( int argc, char *argv[] ) {
             close( pipefd[0] );
             close( pipefd[1] );
 
+#ifdef LIVE /* LIVE */
             pids.pid_quarz = getpid();
 #ifdef PRINT_DEBUG
             printf("PIDS:\n");
@@ -129,13 +130,14 @@ int main ( int argc, char *argv[] ) {
 #ifdef PRINT_SIGNAL
             printf("(quarz) %i send SIGUSR1 to (alsa) %i\n", pids.pid_quarz, pids.pid_alsa);
 #endif
+#endif /* LIVE */
         /*
          * This part war staken from "man 3 wait"
          * Check it for references and additions
          * TODO Enhance this part to be more useful
          */
             do {
-                waitpid( pids.pid_alsa, &status, WUNTRACED
+                waitpid( pids.pid_fft_master, &status, WUNTRACED
             #ifdef WCONTINUED
                         | WCONTINUED 
             #endif

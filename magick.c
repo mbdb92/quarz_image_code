@@ -354,7 +354,7 @@ int run_ppm_from_fft( struct fft_data *fft_d, unsigned long size, int nr ) {
     ppm->fd = fopen(ppm->path, "w+");
     fprintf( ppm->fd, "P3\n%i %i\n%i\n", X_SIZE, (int) (size / 2), BYTE_SIZE );
     
-    for( int i = 0; i < (size / 2); i++ ) {
+    for( int i = 0; (i < (size / 2) || i < PPM_MAX); i++ ) {
         ppm->color = (int)( ((long) fabs(fft_d->fft_out[i]) - ppm->min) / ppm->divider );
         fprintf( ppm->fd, "0 %i 0\n", ppm->color );
     }
