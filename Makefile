@@ -8,7 +8,7 @@ LIBS_ALSA = -lasound
 LIBS_FFT = -lm -lfftw3
 LIBS_WAND_MAGICK = `pkg-config --cflags --libs MagickWand` -DWAND
 LIBS_CORE_MAGICK = `pkg-config --cflags --libs MagickWand` -DCORE
-LIBS_PPM = `pkg-config --cflags --libs MagickWand` -DPPM
+LIBS_PPM = -DPPM
 
 LINK_ALSA = -I/usr/lib
 
@@ -27,7 +27,7 @@ verbose: $(FILE)
 	$(CC) $(FILE) -o $(OBJ) $(CFLAGS) $(LIBS_ALSA) $(LIBS_FFT) $(LIBS_MAGICK) -v -DPRINT_DEBUG -DPRINT_SIGNAL
 
 debug: $(FILE)
-	$(CC) $(FILE) -o $(OBJ) $(CFLAGS) $(LIBS_ALSA) $(LIBS_FFT) $(LIBS_PPM) -v -DPRINT_DEBUG -DPRINT_SIGNAL -DBREAKPOINTS -DPRINT_MAGICK_DEBUG -DRECORDED
+	$(CC) -g $(FILE) -o $(OBJ) $(CFLAGS) $(LIBS_ALSA) $(LIBS_FFT) $(LIBS_PPM) -v -DPRINT_DEBUG -DPRINT_SIGNAL -DBREAKPOINTS -DPRINT_MAGICK_DEBUG -DRECORDED
 
 signals: $(FILE)
 	$(CC) $(FILE) -o $(OBJ) $(CFLAGS) $(LIBS_ALSA) $(LIBS_FFT) $(LIBS_MAGICK) -v -DPRINT_SIGNAL

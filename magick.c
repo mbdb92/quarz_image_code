@@ -16,7 +16,8 @@
 #include "magick.h"
 #ifdef WAND
 #include <MagickWand/MagickWand.h>
-#else
+#endif
+#ifdef CORE
 #include <MagickCore/MagickCore.h>
 #endif
 
@@ -347,8 +348,12 @@ int run_ppm_from_fft( struct fft_data *fft_d, unsigned long size, int nr ) {
     // suaber auf den Farbraum runterzurechnen wird hier ein Faktor genommen, 
     // der den Max. Hub beschreibt
     find_min_max( fft_d->fft_out, &ppm->max, &ppm->min, size );
+#ifdef PRINT_DEBUG
     printf("%li, %li\n", ppm->min, ppm->max);
-    ppm->divider = (ppm->max - ppm->min) /BYTE_SIZE;
+#endif
+    ppm->divider = (ppm->max - ppm->min) / BYTE_SIZE;
+    if( ppm->divider == 0 )
+        ppm->divider = 1;
 
     // To create ppm file
     ppm->fd = fopen(ppm->path, "w+");

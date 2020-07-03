@@ -79,6 +79,7 @@ int fft_run( char *filename ) {
     fftw_plan plan;
     int rc;
     int nr = 0;
+
 //    FILE *gnuplot = popen("gnuplot -persistent", "w");
 #ifdef LIVE /* LIVE */
     /*
