@@ -3,8 +3,10 @@
 
 // For sta
 #include <stdlib.h>
+#ifdef LIVE
 // For alsa
 #include <alsa/asoundlib.h>
+#endif
 //For fft
 #include <fftw3.h>
 // For magick
@@ -19,7 +21,9 @@
 #define true 1
 #define false 0
 
+#ifdef LIVE
 int alsa_state;
+#endif
 int quarz_state;
 int fft_pipe_state;
 
@@ -29,6 +33,7 @@ struct pid_collection {
     pid_t pid_quarz;
 };
 
+#ifdef LIVE
 struct alsa_params {
     snd_pcm_t *handle;
     snd_pcm_hw_params_t *params;
@@ -36,6 +41,7 @@ struct alsa_params {
     long *buffer;
     int size;
 };
+#endif
 
 struct fft_params {
     fftw_plan plan;
@@ -48,6 +54,7 @@ struct fft_data {
     double *fft_out;
 };
 
+#ifdef RECORDED
 struct wav_header {
     int file_size;
     short format_type;
@@ -55,6 +62,7 @@ struct wav_header {
     int sample_rate;
     short bits_per_sample;
 };
+#endif
 
 #ifdef WAND
 struct magick_params {

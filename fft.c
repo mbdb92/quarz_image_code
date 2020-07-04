@@ -10,10 +10,15 @@
 #include <stdlib.h>
 //malloc_usabel_size
 #include <malloc.h>
+#ifdef LIVE
 // For Signals
 #include <signal.h>
-#include <unistd.h>
 #include "sighandler.h"
+#include <unistd.h>
+#endif
+// For open
+#include <sys/stat.h>
+#include <fcntl.h>
 // To access magick runtime
 #ifdef CORE
 #include "magick.h"
@@ -27,7 +32,9 @@
 
 #include "fft.h"
 
+#ifdef LIVE
 struct sigaction fft_act;
+#endif
 /*
  * This Function sets up the needed structs
  */

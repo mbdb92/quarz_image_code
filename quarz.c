@@ -1,9 +1,11 @@
 // For wait
 #include <sys/wait.h>
+#ifdef LIVE
 // For signals
 #include <signal.h>
-// For shared memory#
+// For shared memory
 #include <sys/mman.h>
+#endif
 // For pipe, signals, wait, mmam
 #include <stdio.h>
 #include <unistd.h>
@@ -15,20 +17,23 @@
 #include "codes.h"
 #include "type.h"
 // For calling alsa child
+#ifdef LIVE /* LIVE */
 #include "alsa.h"
+#endif /* LIVE */
 #include "fft.h"
 
+#ifdef LIVE /* LIVE */
 struct sigaction quarz_act;
 
-#ifdef LIVE /* LIVE */
 int main () {
 #endif /* LIVE */
 #ifdef RECORDED /* RECORDED */
 int main ( int argc, char *argv[] ) {
 #endif /* RECORDED */
-    int pipefd[2];
     int return_value, status;
     struct pid_collection pids;
+#ifdef LIVE /* LIVE */
+    int pipefd[2];
     // To check if signalhandler is set correctly
     void (*sig_handler_return) (int);
     void *shmem;
@@ -60,7 +65,6 @@ int main ( int argc, char *argv[] ) {
      */
     shmem = mmap( NULL, (sizeof(pids) + sizeof(int)), protection, visibility, -1, 0 );
 
-#ifdef LIVE /* LIVE */
     // Forking for alsa
     pids.pid_alsa = fork();
     if( pids.pid_alsa == OK ) {
@@ -108,10 +112,10 @@ int main ( int argc, char *argv[] ) {
              */
             // For ALSA
 
+#ifdef LIVE /* LIVE */
             close( pipefd[0] );
             close( pipefd[1] );
 
-#ifdef LIVE /* LIVE */
             pids.pid_quarz = getpid();
 #ifdef PRINT_DEBUG
             printf("PIDS:\n");
