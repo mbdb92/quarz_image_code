@@ -8,7 +8,7 @@
 #include <time.h>
 // For debugging
 #include <assert.h>
-// for fabs()
+// for fabs(), log10()
 #include <math.h>
 // Local defined files
 #include "codes.h"
@@ -337,12 +337,35 @@ int run_magick_from_fft( struct fft_data *fft_d, unsigned long size, int nr ) {
 #endif
 #ifdef PPM
 
-int run_ppm_from_fft( struct fft_data *fft_d, unsigned long size, int nr ) {
+int run_ppm_from_fft( struct fft_data *fft_d, unsigned long size, int nr, int total_size ) {
     struct ppm_params *ppm;
+    int lead_count, base_current, lead_loop;
 
     ppm = malloc( sizeof(struct ppm_params) );
 
-    sprintf( ppm->path, "%i.ppm", nr );
+    /*
+     * This takes care of the 0-padding for lower numbers
+     * I use this to be able to use the *-opperator
+     * in a linux shell. Else I would get 1 10 2 ...
+     */
+    // Takes the x in 10^x as how many 0 need to be padded
+    lead_count = floor( log10( (double) total_size ));
+    base_current = floor( log10( (double) nr ));
+    lead_loop = lead_count - base_current;
+
+    char lead[lead_loop];
+    
+    for( int i = 0; i < lead_loop; i++) {
+        lead[i] = '0';
+        printf("%i\n", i);
+    }
+    // The last part needs to be a terminal sign
+    // Else %s in the print wont stop adding chars
+    lead[lead_loop] = '\0';
+
+    // Generates the file name
+    sprintf( ppm->path, "%s%i.ppm",lead, nr );
+
 
     // Um die double werte, die hier eh schon convertiert zu long sid, aus fft
     // suaber auf den Farbraum runterzurechnen wird hier ein Faktor genommen, 

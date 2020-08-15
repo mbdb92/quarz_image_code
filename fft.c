@@ -156,6 +156,8 @@ int fft_run( char *filename ) {
     // For 10ms it is 100 i.e.
     size_input = file_header->sample_rate / TIMEFRAME_DIVISOR;
     fft_p->size = file_header->sample_rate;
+    // This is needed to add the preceding 0 to the filename
+    fft_p->total_size = file_header->file_size / size_input;
 #ifdef PRINT_DEBUG
     printf("HEADER:\nfilesize: %i\nformat type: %i\nchannel number: %i\nsample rate: %i\nbits per sample: %i\n", file_header->file_size, file_header->format_type, file_header->channel_number, file_header->sample_rate, file_header->bits_per_sample );
 #endif
@@ -242,7 +244,7 @@ int fft_run( char *filename ) {
         run_magick_from_fft( fft_d, (unsigned long) fft_p->size, nr );
 #endif
 #ifdef PPM
-        run_ppm_from_fft( fft_d, (unsigned long) fft_p->size, nr );
+        run_ppm_from_fft( fft_d, (unsigned long) fft_p->size, nr, fft_p->total_size );
 #endif    
 #ifdef PRINT_DEBUG
         printf("read_size = %i\n", read_size);

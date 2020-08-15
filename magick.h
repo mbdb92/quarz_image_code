@@ -16,7 +16,7 @@ int destory_drawing( struct magick_core_params *params );
 int run_magick_from_fft( struct fft_data *data, unsigned long size, int nr);
 #endif
 #ifdef PPM
-int run_ppm_from_fft( struct fft_data *fft_d, unsigned long size, int nr );
+int run_ppm_from_fft( struct fft_data *fft_d, unsigned long size, int nr, int total_size );
 #endif
 
 #endif //DRAWING_H

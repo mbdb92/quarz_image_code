@@ -47,6 +47,7 @@ struct fft_params {
     fftw_plan plan;
     int size;
     int rank;
+    int total_size;
 };
 
 struct fft_data {
