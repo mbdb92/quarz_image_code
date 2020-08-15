@@ -357,7 +357,6 @@ int run_ppm_from_fft( struct fft_data *fft_d, unsigned long size, int nr, int to
     
     for( int i = 0; i < lead_loop; i++) {
         lead[i] = '0';
-        printf("%i\n", i);
     }
     // The last part needs to be a terminal sign
     // Else %s in the print wont stop adding chars
