@@ -349,22 +349,29 @@ int run_ppm_from_fft( struct fft_data *fft_d, unsigned long size, int nr, int to
      * in a linux shell. Else I would get 1 10 2 ...
      */
     // Takes the x in 10^x as how many 0 need to be padded
-    lead_count = floor( log10( (double) total_size ));
-    base_current = floor( log10( (double) nr ));
-    lead_loop = lead_count - base_current;
+    if( total_size != 0 ){
+        lead_count = floor( log10( (double) total_size ));
+        base_current = floor( log10( (double) nr ));
+        lead_loop = lead_count - base_current;
 
-    char lead[lead_loop];
-    
-    for( int i = 0; i < lead_loop; i++) {
-        lead[i] = '0';
+        char lead[lead_loop];
+        
+        for( int i = 0; i < lead_loop; i++) {
+            lead[i] = '0';
+        }
+        // The last part needs to be a terminal sign
+        // Else %s in the print wont stop adding chars
+        lead[lead_loop] = '\0';
+
+        // Generates the file name
+        sprintf( ppm->path, "%s%i.ppm", lead, nr );
     }
-    // The last part needs to be a terminal sign
-    // Else %s in the print wont stop adding chars
-    lead[lead_loop] = '\0';
+    else {
 
-    // Generates the file name
-    sprintf( ppm->path, "%s%i.ppm",lead, nr );
+        // Generates the file name
+        sprintf( ppm->path, "%i.ppm", nr );
 
+    }
 
     // Um die double werte, die hier eh schon convertiert zu long sid, aus fft
     // suaber auf den Farbraum runterzurechnen wird hier ein Faktor genommen, 
