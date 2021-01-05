@@ -7,6 +7,21 @@
 #include "codes.h"
 #include "type.h"
 
+/* 
+ * This declarations are needed, so the external Variables can be used
+ * They get declarized in their respectable Files already,
+ * but this doesn't solve the failed linker. 
+ * When they are declared here, they will get overrided during runtime
+ * but the linker won't fail anymore
+ */
+
+//int quarz_state = 0;
+//int alsa_state = 0;
+//int fft_pipe_state = 0;
+//extern int quarz_state;
+//extern int alsa_state;
+//extern int fft_master_state;
+
 void quarz_sig_handler( int signum ) {
     if( signum == SIGUSR1 ) {
         if( !( (quarz_state & ALSA_READY) >> SHIFT_A_R ) ) {

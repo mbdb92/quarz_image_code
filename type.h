@@ -10,22 +10,16 @@
 //For fft
 #include <fftw3.h>
 // For magick
-#ifdef WAND
-#include <MagickWand/MagickWand.h>
-#endif
-#ifdef CORE
-#include <MagickCore/MagickCore.h>
-#endif
 
 //typedef int bool;
 #define true 1
 #define false 0
 
 #ifdef LIVE
-int alsa_state;
+extern int alsa_state;
 #endif
-int quarz_state;
-int fft_pipe_state;
+extern int quarz_state;
+extern int fft_pipe_state;
 
 struct pid_collection {
     pid_t pid_alsa;
@@ -55,38 +49,6 @@ struct fft_data {
     double *fft_out;
 };
 
-#ifdef RECORDED
-struct wav_header {
-    int file_size;
-    short format_type;
-    short channel_number;
-    int sample_rate;
-    short bits_per_sample;
-};
-#endif
-
-#ifdef WAND
-struct magick_params {
-    MagickWand *m_wand;
-    DrawingWand *d_wand;
-    PixelWand *c_wand;
-    char color[8];
-    long max;
-    long min;
-};
-#endif
-#ifdef CORE
-struct magick_core_params {
-    ExceptionInfo *exception;
-    Image *image;
-    ImageInfo *image_info;
-    char *pixels;
-    char path[50];
-    char color[8];
-    long max;
-    long min;
-};
-#endif
 #ifdef PPM
 struct ppm_params {
     char path[50];

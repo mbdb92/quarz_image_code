@@ -3,6 +3,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+//extern int quarz_state;
+//extern int alsa_state;
+//extern int fft_master_state;
+
 // Helper function for debugging errors. If the device has a state error,
 // this function can check for the state
 void check_state( snd_pcm_t *handle ) {

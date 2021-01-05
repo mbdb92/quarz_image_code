@@ -24,16 +24,18 @@
 
 #ifdef LIVE /* LIVE */
 struct sigaction quarz_act;
+int quarz_state;
+int alsa_state;
+int fft_pipe_state;
 
 int main () {
 #endif /* LIVE */
-#ifdef RECORDED /* RECORDED */
-int main ( int argc, char *argv[] ) {
-#endif /* RECORDED */
     int return_value, status;
     struct pid_collection pids;
 #ifdef LIVE /* LIVE */
+#ifdef PIPE
     int pipefd[2];
+#endif
     // To check if signalhandler is set correctly
     void (*sig_handler_return) (int);
     void *shmem;
@@ -51,10 +53,13 @@ int main ( int argc, char *argv[] ) {
     sigaction( SIGUSR1, &quarz_act, 0 );
     sigaction( SIGUSR2, &quarz_act, 0 );
 
+#ifdef PIPE
     // Setup of the pipe
     return_value = pipe(pipefd);
     if( return_value != OK )
         return E_PIPE;
+#endif
+    // Setup Ring Buffer
 
     // Setup for shared mamory
     protection = PROT_READ | PROT_WRITE;
@@ -84,20 +89,6 @@ int main ( int argc, char *argv[] ) {
 #ifdef LIVE /* LIVE */
             rc = fft_handler( pipefd, shmem );
 #endif /* LIVE */
-#ifdef RECORDED /* RECORDED */
-            char *filename;
-
-            filename = (char *) malloc( 100 * sizeof(char) );
-            if( argc == 2 )
-                strcpy( filename, argv[1] );
-            else
-                return E_ARGS;
-
-            rc = fft_run( filename );
-#endif /* RECORDED */
-
-            free( filename );
-
         } else if( pids.pid_fft_master == -1 ){
             return E_FORK;
         /*
@@ -126,8 +117,10 @@ int main ( int argc, char *argv[] ) {
             
             memcpy( shmem, &pids, sizeof(struct pid_collection) );
 
-            while( !(((quarz_state & FFT_READY) >> SHIFT_F_R) && (quarz_state & ALSA_READY) >> SHIFT_A_R ) ) {
+            while( quarz_state < 3 ){
+            //while( !( ((quarz_state & FFT_READY) >> SHIFT_F_R) && ((quarz_state & ALSA_READY) >> SHIFT_A_R) ) ) {
                 asm( "nop" );
+                printf("%i", quarz_state);
             }
 
             kill( pids.pid_alsa, SIGUSR1 );

@@ -28,6 +28,9 @@
 
 struct sigaction alsa_act;
 
+//extern int quarz_state;
+//extern int alsa_state;
+//extern int fft_master_state;
 /*
  * This takes the pointer to the array of params and sets the needed parameters
  * Once this is done, the settings will be applied
@@ -39,8 +42,9 @@ struct sigaction alsa_act;
  */
 int setup_pcm_struct( snd_pcm_t *handle, snd_pcm_hw_params_t *params ) {
     int rc, dir;
-    unsigned int rate = RATE;
+    unsigned int rate = SAMPLERATE;
     snd_pcm_uframes_t frames = FRAMES;
+    snd_pcm_uframes_t buffer;
     /*
      * The initialisation of the pointer at this point didn't work, they weren't returned to
      * the calling function. removing them out of the function worked as intended
@@ -73,6 +77,8 @@ int setup_pcm_struct( snd_pcm_t *handle, snd_pcm_hw_params_t *params ) {
 #ifdef PRINT_DEBUG
     printf("Setting Params\n");
 #endif
+    snd_pcm_hw_params_get_buffer_size(params, &buffer);
+    printf("Buffer size is %i\n", buffer);
     // Once the struct is filled, the settings get applied to the device
     rc = snd_pcm_hw_params(handle, params);
     if (rc < 0)
@@ -248,6 +254,7 @@ int alsa_handler( int pipefd[2], void *shmem ) {
 #ifdef PRINT_DEBUG
     // Needed, as alsa currently doesn't know it's own pid
     pids->pid_alsa = getpid();
+    printf("(alsa) PID is %i\n", getpid());
 #endif
 
     if( !((alsa_state & SHMEM_READ) >> SHIFT_S_R ) ) {

@@ -20,12 +20,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 // To access magick runtime
-#ifdef CORE
-#include "magick.h"
-#endif
-#ifdef WAND
-#include "magick.h"
-#endif
 #ifdef PPM
 #include "magick.h"
 #endif
@@ -35,6 +29,9 @@
 #ifdef LIVE
 struct sigaction fft_act;
 #endif
+//extern int quarz_state;
+//extern int alsa_state;
+//extern int fft_pipe_state;
 /*
  * This Function sets up the needed structs
  */
@@ -65,22 +62,9 @@ int destroy_fft( struct fft_params *fft_p, struct fft_data *fft_d ) {
 int fft_handler( int pipefd[2], void *shmem ) {
     struct pid_collection *pids;
     int c;
-#ifdef WAND
-    struct magick_params *magick_p;
-#endif /* WAND */
     double *in;
     void (*sig_handler_return) (int);
 #endif /* LIVE */
-#ifdef RECORDED /* RECORDED */
-int fft_run( char *filename ) {
-    double *in, *out;
-    struct wav_header *file_header;
-    int size_input = INPUT_SIZE;
-    int fd;
-    short *buffer;
-    char *headbuf;
-    int read_size = 0;
-#endif /* RECORDED */
     struct fft_params *fft_p;
     struct fft_data *fft_d;
     fftw_plan plan;
@@ -108,9 +92,6 @@ int fft_run( char *filename ) {
      * The needed structs
      */
     pids = malloc( sizeof(struct pid_collection) );
-#ifdef WAND
-    magick_p = malloc( sizeof(struct magick_params) );
-#endif /* WAND */
     close( pipefd[1] );
 #endif /* LIVE */
 
@@ -138,45 +119,12 @@ int fft_run( char *filename ) {
 #endif
 #endif /* LIVE */
 
-#ifdef RECORDED /* RECORDED */
-    file_header = malloc( sizeof(struct wav_header) );
-    fd = open(filename, O_RDONLY);
-
-    // This Block deals with the wav header, so it isn't in the input data
-    // additionally it sets some values based on the header instead
-    // of the predifined values in codes.h
-    headbuf = malloc( WAV_HEADER_SIZE * sizeof(char) );
-    rc = read( fd, headbuf, (WAV_HEADER_SIZE * sizeof(char)) );
-    rc = (int) strncpy( &file_header->file_size, &headbuf[4], 4*sizeof(char) );
-    rc = (short) strncpy( &file_header->format_type, &headbuf[20], 2*sizeof(char) );
-    rc = (short) strncpy( &file_header->channel_number, &headbuf[22], 2*sizeof(char) );
-    rc = (int) strncpy( &file_header->sample_rate, &headbuf[24], 4*sizeof(char) );
-    rc = (short) strncpy( &file_header->bits_per_sample, &headbuf[34], 2*sizeof(char) );
-    // Timeframe Divisor is the divisor for this: timeslot = 1s / timeslot_divisor
-    // For 10ms it is 100 i.e.
-    size_input = file_header->sample_rate / TIMEFRAME_DIVISOR;
-    fft_p->size = file_header->sample_rate;
-    // This is needed to add the preceding 0 to the filename
-    fft_p->total_size = file_header->file_size / size_input;
-#ifdef PRINT_DEBUG
-    printf("HEADER:\nfilesize: %i\nformat type: %i\nchannel number: %i\nsample rate: %i\nbits per sample: %i\n", file_header->file_size, file_header->format_type, file_header->channel_number, file_header->sample_rate, file_header->bits_per_sample );
-#endif
-    free(headbuf);
-#endif /* RECORDED */
-
     /*
      * This is currently needed, as using the fft_d->fft_in array doesn't work
      * TODO: Fix error
      */
     rc = create_fft( fft_p, fft_d );
     in = (double*) fftw_malloc((sizeof(fftw_complex) * fft_p->size));
-#ifdef RECORDED /* RECORDED */
-    out = (double*) fftw_malloc((sizeof(fftw_complex) * fft_p->size));
-#endif /* RECORDED */
-
-#ifdef WAND
-    rc = setup_drawing( magick_p );
-#endif
 
     fft_p->plan = fftw_plan_r2r_1d(fft_p->size, in, fft_d->fft_out, FFTW_DHT, FFTW_ESTIMATE);
 
@@ -198,9 +146,6 @@ int fft_run( char *filename ) {
         suspend( &fft_pipe_state, ALSA_DONE, SHIFT_A_D );
     }
 #endif /* LIVE */
-#ifdef RECORDED
-    buffer = malloc( fft_p->size * sizeof(short) );
-#endif /* RECORDED */
     while( (fft_pipe_state & RUNTIME) >> SHIFT_R ) {
 #ifdef LIVE /* LIVE */
         c = 0;
@@ -221,39 +166,6 @@ int fft_run( char *filename ) {
         }
     }
 #endif /* LIVE */
-#ifdef RECORDED /* RECORDED */
-        rc = read( fd, buffer, (size_input * sizeof(short)) );
-        if( rc < 1 )
-            exit(0);
-        read_size = read_size + rc;
-        for( int i = 0; i < size_input; i++ ){
-            in[i] = (double) buffer[i] ;
-#ifdef PRINT_DEBUGS
-            printf("%f\n",  in[i] );
-#endif
-        }
-        for( int i = size_input; i < fft_p->size; i++ ){
-            in[i] = 0.0;
-        }
-        nr++;
-        fftw_execute(fft_p->plan);
-#ifdef WAND
-        run_magick_from_fft( magick_p, fft_d, (unsigned long) fft_p->size );
-#endif
-#ifdef CORE
-        run_magick_from_fft( fft_d, (unsigned long) fft_p->size, nr );
-#endif
-#ifdef PPM
-        run_ppm_from_fft( fft_d, (unsigned long) fft_p->size, nr, fft_p->total_size );
-#endif    
-#ifdef PRINT_DEBUG
-        printf("read_size = %i\n", read_size);
-#endif
-        if(read_size >= (file_header->file_size - WAV_HEADER_SIZE)){
-            fft_pipe_state = fft_pipe_state - RUNTIME;
-        }
-    }
-#endif /* RECORDED */
 #ifdef LIVE /* LIVE */
     if ( c == 0 ) {
 #ifdef PRINT_DEBUG
@@ -264,23 +176,13 @@ int fft_run( char *filename ) {
      * The previous created plan gets executed here
      */
     fftw_execute(fft_p->plan);
-#ifdef WAND
-    run_magick_from_fft( magick_p, fft_d, (unsigned long) fft_p->size );
-#endif
-#ifdef CORE
-    run_magick_from_fft( fft_d, (unsigned long) fft_p->size, nr );
-#endif
 #ifdef PPM
-    run_ppm_from_fft( fft_d, (unsigned long) fft_p->size, nr );
+    run_ppm_from_fft( fft_d, (unsigned long) fft_p->size, nr, MAX_COUNT_FOR_ZERO_PADDING );
 #endif    
 
 #endif /* LIVE */
 
     fftw_free(in);
-#ifdef WAND
-    destroy_drawing( magick_p );
-    free(magick_p);
-#endif
     destroy_fft( fft_p, fft_d );
     free(fft_d);
     free(fft_p);
@@ -291,25 +193,6 @@ int fft_run( char *filename ) {
      //   wait();
     }
 #endif /* LIVE */
-
-#ifdef RECORDED /* RECORDED */
-    free(buffer);
-    close(fd);
-
-/* GNUPLOT
-    fprintf(gnuplot, "plot '-'\n");
-
-    for( int j = 0; j < fft_p->size; j++) {
-     //   printf("%f\n", fft_d->fft_out[j] );
-        fprintf(gnuplot, "%g %g\n", (double) j, fft_d->fft_out[j]);
-    }
-    fprintf(gnuplot, "e\n");
-    fflush(gnuplot);
-*/
-
-    fftw_free(out);
-    free(file_header);
-#endif /* RECORDED */
 
     return OK;
 }
