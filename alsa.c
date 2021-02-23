@@ -216,14 +216,20 @@ int run_loop ( int loops, long *buffer, struct alsa_params *alsa ) {
             fprintf(stderr, "short read, read %d frames\n", rc);
         } else {
 #ifdef PRINT_DEBUG
-            printf("Frames read: %i\n", rc);
+            printf("(alsa) Frames read: %i\n", rc);
 #endif
         }
     }
     return 0;
 }
 
+#ifdef PIPE
 int alsa_handler( int pipefd[2], void *shmem ) {
+#endif /* PIPE */
+#ifdef RINGBUFFER
+int alsa_handler( int *ringbuffer, int *wrote_size, void *shmem ) {
+    unsigned int buffercount = ZERO;
+#endif /* RINGBUFFER */
     struct pid_collection *pids;
     struct alsa_params *alsa;
     int rc, dir, loops;
@@ -246,8 +252,10 @@ int alsa_handler( int pipefd[2], void *shmem ) {
     sigaction( SIGUSR1, &alsa_act, 0 );
     sigaction( SIGCONT, &alsa_act, 0 );
 
+#ifdef PIPE
     // This end of the pipe isn't needed in thos process
     close( pipefd[0] );
+#endif /* PIPE */
 
     // Tell quarz this child is ready and sleepy
     kill (getppid(), SIGUSR1 );
@@ -298,24 +306,43 @@ int alsa_handler( int pipefd[2], void *shmem ) {
     loops = 1;
     int testcount = 0;
     while( !((alsa_state & TERMINATE) >> SHIFT_T ) ){
-        testcount++;
+//        testcount++;
         run_loop( loops, buffer, alsa );
         // This can be toogled by fft with SIGUSR2
         // It is intended to make alsa dump the readed
         // frames, if fft can't handle them but continue
         // reading the buffer to always get the latest frames
         if( (alsa_state & RUNTIME) >> SHIFT_R ) {
+#ifdef PIPE
             rc = write( pipefd[1], &buffer, alsa->size );
+#endif /* PIPE */
+#ifdef RINGBUFFER
+
+            rc = write( ringbuffer[buffercount], &buffer, alsa->size );
+            // if not, there weren't any bytes written to the buffer
+            // but write can return -1
+            if( rc > ZERO ) {
+                *wrote_size = rc;
+                buffercount = buffercount + rc; 
+                if( buffercount >= SAMPLERATE )
+                    buffercount = 0;
+                kill( pids->pid_fft_master, SIGCONT );
+#endif /* RINGBUFFER */
 #ifdef PRINT_DEBUG
-            printf("(alsa) %i: wrote %i to pipe\n", pids->pid_alsa, rc);
-#endif
+                printf("(alsa) %i: wrote %i to pipe\n", pids->pid_alsa, rc);
+                printf("(alsa) %i: wrote_size is %i\n", pids->pid_alsa, *wrote_size);
+                printf("(alsa) %i: wrote_size is at %i\n", pids->pid_alsa, wrote_size);
+#endif /* PRINT_DEBUG */
 #ifdef PRINT_SIGNAL
-        printf("(alsa) %i: Send SIGCONT to (fft) %i\n", pids->pid_alsa, pids->pid_fft_master);
-#endif
+                printf("(alsa) %i: Send SIGCONT to (fft) %i\n", pids->pid_alsa, pids->pid_fft_master);
+#endif /* PRINT_SIGNAL */
+            }
         }
-        if( testcount == 1000 )
+        // Used for limit size during testing
+//        if( testcount == 1000 )
             alsa_state += TERMINATE;
-        kill( pids->pid_fft_master, SIGCONT );
+        // no idea why this is here
+//        kill( pids->pid_fft_master, SIGCONT );
     }
 
     /*

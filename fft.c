@@ -28,7 +28,10 @@
 
 #ifdef LIVE
 struct sigaction fft_act;
-#endif
+#endif /* LIVE */
+#ifdef RINGBUFFER
+unsigned int pc_count = ZERO;
+#endif /* RINGBUFFER */
 //extern int quarz_state;
 //extern int alsa_state;
 //extern int fft_pipe_state;
@@ -59,9 +62,16 @@ int destroy_fft( struct fft_params *fft_p, struct fft_data *fft_d ) {
 }
 
 #ifdef LIVE /* LIVE */
+#ifdef PIPE
 int fft_handler( int pipefd[2], void *shmem ) {
+#endif /* PIPE */
+#ifdef RINGBUFFER
+int fft_handler( int *ringbuffer, int *wrote_size, void *shmem ) {
+    unsigned int buffercount = ZERO;
+    sigset_t mask, oldmask;
+#endif /* RINGBUFFER */
     struct pid_collection *pids;
-    int c;
+    int c, child_pid;
     double *in;
     void (*sig_handler_return) (int);
 #endif /* LIVE */
@@ -92,12 +102,18 @@ int fft_handler( int pipefd[2], void *shmem ) {
      * The needed structs
      */
     pids = malloc( sizeof(struct pid_collection) );
+#ifdef PIPE
     close( pipefd[1] );
+#endif /* PIPE */
 #endif /* LIVE */
 
     fft_p = malloc( sizeof(struct fft_params) );
     fft_d = malloc( sizeof(struct fft_data) );
 
+#ifdef RINGBUFFER
+    sigemptyset (&mask);
+    sigaddset (&mask, SIGCONT);
+#endif /* RINGBUFFER */
 #ifdef LIVE /*LIVE */
     /*
      * Get pid of parrent to be ready to complet init step
@@ -145,32 +161,77 @@ int fft_handler( int pipefd[2], void *shmem ) {
 #endif
         suspend( &fft_pipe_state, ALSA_DONE, SHIFT_A_D );
     }
+
+    //If this isn't set, sighandling is fubar
+    fft_pipe_state+=CONTINUE;
+
 #endif /* LIVE */
     while( (fft_pipe_state & RUNTIME) >> SHIFT_R ) {
 #ifdef LIVE /* LIVE */
-        c = 0;
-        c = fork();
-        if( c == 0 ) {
-            long *buffer;
-            buffer = malloc( fft_p->size * sizeof(long) );
-            rc = read( pipefd[0], buffer, (fft_p->size * sizeof(long) ));
-            if( rc < 1 )
-                exit(0);
-            for( int i = 0; i< fft_p->size; i++ ){
-                in[i] = (double) buffer[i];
+#ifdef RINGBUFFER
+        if( pc_count < MAX_PC_COUNT ) {
+#endif /* RINGBUFFER */
+            c = 0;
+            c = fork();
+            if( c == 0 ) {
+                long *buffer;
+                child_pid = getpid();
+                buffer = malloc( fft_p->size * sizeof(long) );
+#ifdef PIPE
+                rc = read( pipefd[0], buffer, (fft_p->size * sizeof(long) ));
+#endif /* PIPE */
+#ifdef RINGBUFFER
+                rc = read( ringbuffer[buffercount], buffer, *wrote_size);
+               // strncpy( ringbuffer[buffercount], buffer, *wrote_size);
+#endif /* RINGBUFFER */
+#ifdef PRINT_DEBUG
+                printf("(fft) %i: read %i bytes\n", child_pid, rc);
+                printf("(fft) %i: wrote_size is %i\n", child_pid, *wrote_size);
+                printf("(fft) %i: wrote_size is at %i\n", child_pid, wrote_size);
+#endif /* PRINT_DEBUG */
+//                if( rc < 1 )
+//                    exit(0);
+                for( int i = 0; i < *wrote_size; i++ ){
+                    in[i] = (double) buffer[i];
+                    //in[i] = (double) ringbuffer[buffercount + i];
+                }
+#ifdef PRINT_DEBUG
+                printf("(fft) %i: done copying data\n", child_pid);
+#endif
+                // This is in the child. It souldn't repeat the while loop!
+                free(buffer);
+#ifdef RINGBUFFER
+                pc_count--;
+#endif /* RINGBUFFER */
+                fft_pipe_state = fft_pipe_state - RUNTIME;
+            } else {
+#ifdef RINGBUFFER
+                pc_count++;
+                buffercount + *wrote_size;
+                if( buffercount == SAMPLERATE )
+                    buffercount = 0;
+#endif /* RINGBUFFER */
+                // This is in the parrent
+                nr++;
             }
-            free(buffer);
-            fft_pipe_state = fft_pipe_state - RUNTIME;
+#ifdef RINGBUFFER
         } else {
             nr++;
+            buffercount + fft_p->size;
+            if( buffercount == SAMPLERATE )
+                buffercount = 0;
         }
+        sigprocmask( SIG_BLOCK, &mask, &oldmask );
+        while( !((fft_pipe_state & CONTINUE) >> SHIFT_C) )
+            sigsuspend( &oldmask );
+        sigprocmask( SIG_UNBLOCK, &mask, NULL );
+        fft_pipe_state -= CONTINUE;
+#endif /* RINGBUFFER */
     }
+    printf("exited while loop\n");
 #endif /* LIVE */
 #ifdef LIVE /* LIVE */
     if ( c == 0 ) {
-#ifdef PRINT_DEBUG
-    printf("(fft) %i: read %i from pipe\n", pids->pid_fft_master, rc);
-#endif
     
     /*
      * The previous created plan gets executed here
@@ -179,6 +240,10 @@ int fft_handler( int pipefd[2], void *shmem ) {
 #ifdef PPM
     run_ppm_from_fft( fft_d, (unsigned long) fft_p->size, nr, MAX_COUNT_FOR_ZERO_PADDING );
 #endif    
+
+#ifdef PRINT_DEBUG
+    printf("(fft) %i: done with ppm creation\n", child_pid);
+#endif
 
 #endif /* LIVE */
 

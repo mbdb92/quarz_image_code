@@ -20,6 +20,7 @@ extern int alsa_state;
 #endif
 extern int quarz_state;
 extern int fft_pipe_state;
+//extern unsigned int wrote_size;
 
 struct pid_collection {
     pid_t pid_alsa;

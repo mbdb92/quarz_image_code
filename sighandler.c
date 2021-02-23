@@ -84,6 +84,15 @@ void alsa_sig_handler( int signum ) {
 
 void fft_sig_handler( int signum ) {
     if( signum == SIGCONT ) {
+#ifdef RINGBUFFER
+        if( ((fft_pipe_state & ALSA_DONE) >> SHIFT_A_D) && !((fft_pipe_state & CONTINUE) >> SHIFT_C) ) {
+            fft_pipe_state += CONTINUE;
+#ifdef PRINT_SIGNAL
+            printf("(fft) caught SIGCONT, state = %i\n", fft_pipe_state);
+#endif
+            return ;
+        }
+#endif /* RINGBUFFER */
         if( !((fft_pipe_state & ALSA_DONE) >> SHIFT_A_D) ) {
             fft_pipe_state += ALSA_DONE;
 #ifdef PRINT_SIGNAL

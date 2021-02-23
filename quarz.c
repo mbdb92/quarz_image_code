@@ -27,6 +27,7 @@ struct sigaction quarz_act;
 int quarz_state;
 int alsa_state;
 int fft_pipe_state;
+//unsigned int wrote_size;
 
 int main () {
 #endif /* LIVE */
@@ -36,14 +37,20 @@ int main () {
 #ifdef PIPE
     int pipefd[2];
 #endif
+#ifdef RINGBUFFER
+    int *ringbuffer;
+    int *wrote_size;
+#endif /* RINGBUFFER */
     // To check if signalhandler is set correctly
     void (*sig_handler_return) (int);
     void *shmem;
     int protection, visibility;
     char temp_buffer;
     
+    printf("I am running\n");
     // Used for transfer of pid to childs later
     quarz_state = ZERO;
+    wrote_size = ZERO;
 
     memset( &quarz_act, 0, sizeof(quarz_act) );
 
@@ -53,17 +60,27 @@ int main () {
     sigaction( SIGUSR1, &quarz_act, 0 );
     sigaction( SIGUSR2, &quarz_act, 0 );
 
+    // Setup for shared mamory
+    // Moved here, for Ringbuffer to use
+    protection = PROT_READ | PROT_WRITE;
+    visibility = MAP_SHARED | MAP_ANONYMOUS;
+
 #ifdef PIPE
     // Setup of the pipe
     return_value = pipe(pipefd);
     if( return_value != OK )
         return E_PIPE;
-#endif
+#endif /* PIPE */
+#ifdef RINGBUFFER
     // Setup Ring Buffer
-
-    // Setup for shared mamory
-    protection = PROT_READ | PROT_WRITE;
-    visibility = MAP_SHARED | MAP_ANONYMOUS;
+    // Malloc for a full second
+    ringbuffer = mmap( NULL, (sizeof(int) * SAMPLERATE), protection, visibility, -1, 0);
+    if( ringbuffer == NULL )
+        return E_RB;
+    wrote_size = mmap( NULL, (sizeof(int)), protection, visibility, -1, 0);
+    if( wrote_size == NULL )
+        return E_RB;
+#endif /* RINGBUFFER */
 
     /*
      * The sizeof(int) is needed to transfer the size
@@ -75,7 +92,12 @@ int main () {
     if( pids.pid_alsa == OK ) {
         int rc;
 
+#ifdef PIPE
         rc = alsa_handler( pipefd, shmem );
+#endif /* PIPE */
+#ifdef RINGBUFFER
+        rc = alsa_handler( ringbuffer, wrote_size, shmem );
+#endif /* RINGBUFFER */
 
     } else if( pids.pid_alsa == -1 ) {
         return E_FORK;
@@ -87,7 +109,12 @@ int main () {
         if( pids.pid_fft_master == OK ) {
             int rc;
 #ifdef LIVE /* LIVE */
+#ifdef PIPE
             rc = fft_handler( pipefd, shmem );
+#endif /* PIPE */
+#ifdef RINGBUFFER
+            rc = fft_handler( ringbuffer, wrote_size, shmem );
+#endif /* RINGBUFFER */
 #endif /* LIVE */
         } else if( pids.pid_fft_master == -1 ){
             return E_FORK;
@@ -104,8 +131,10 @@ int main () {
             // For ALSA
 
 #ifdef LIVE /* LIVE */
+#ifdef PIPE
             close( pipefd[0] );
             close( pipefd[1] );
+#endif /* PIPE */
 
             pids.pid_quarz = getpid();
 #ifdef PRINT_DEBUG
@@ -117,10 +146,10 @@ int main () {
             
             memcpy( shmem, &pids, sizeof(struct pid_collection) );
 
-            while( quarz_state < 3 ){
-            //while( !( ((quarz_state & FFT_READY) >> SHIFT_F_R) && ((quarz_state & ALSA_READY) >> SHIFT_A_R) ) ) {
+  //          while( quarz_state < 3 ){
+            while( !( ((quarz_state & FFT_READY) >> SHIFT_F_R) && ((quarz_state & ALSA_READY) >> SHIFT_A_R) ) ) {
                 asm( "nop" );
-                printf("%i", quarz_state);
+//                printf("%i", quarz_state);
             }
 
             kill( pids.pid_alsa, SIGUSR1 );
@@ -146,5 +175,9 @@ int main () {
     }
 #endif /* LIVE */
 
+#ifdef RINGBUFFER
+    munmap( ringbuffer, (sizeof(int) * SAMPLERATE));
+    munmap( wrote_size, sizeof(int));
+#endif /* RINGBUFFER */
     return OK;
 }
