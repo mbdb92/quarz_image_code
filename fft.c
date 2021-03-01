@@ -23,6 +23,11 @@
 #ifdef PPM
 #include "magick.h"
 #endif
+#ifdef TIME
+// for clock
+//#include <time.h>
+#include <sys/times.h>
+#endif
 
 #include "fft.h"
 
@@ -70,6 +75,12 @@ int fft_handler( int pipefd[2], void *shmem ) {
     fftw_plan plan;
     int rc;
     int nr = 0;
+#ifdef TIME
+    clock_t time_start, time_end, time_used;
+//    struct tms *t_s; 
+//    struct tms *t_e;
+    int time_in_sec;
+#endif
 
 //    FILE *gnuplot = popen("gnuplot -persistent", "w");
 #ifdef LIVE /* LIVE */
@@ -87,6 +98,7 @@ int fft_handler( int pipefd[2], void *shmem ) {
     fft_act.sa_flags = SA_SIGINFO;
 
     sigaction( SIGUSR1, &fft_act, 0 );
+    sigaction( SIGUSR2, &fft_act, 0 );
     sigaction( SIGCONT, &fft_act, 0 );
     /* 
      * The needed structs
@@ -152,6 +164,13 @@ int fft_handler( int pipefd[2], void *shmem ) {
         c = fork();
         if( c == 0 ) {
             long *buffer;
+
+#ifdef TIME
+//            t_s = malloc(sizeof(struct tms));
+//            t_e = malloc(sizeof(struct tms));
+            //time_start = times( t_s );
+            time_start = clock();
+#endif
             buffer = malloc( fft_p->size * sizeof(long) );
             rc = read( pipefd[0], buffer, (fft_p->size * sizeof(long) ));
             if( rc < 1 )
@@ -176,9 +195,19 @@ int fft_handler( int pipefd[2], void *shmem ) {
      * The previous created plan gets executed here
      */
     fftw_execute(fft_p->plan);
+#ifdef TIME
+    time_end = clock();
+    //time_end = times( t_e );
+    time_used = time_end - time_start;
+    c = getpid();
+    printf("%i (fft): time used %li to %li, total %li\n", c, time_start, time_end, time_used);
+    //printf("%i: user time %li, system time %li\n", c, (t_e->tms_utime - t_s->tms_utime), (t_e->tms_stime - t_s->tms_stime));
+    //free(t_s);
+    //free(t_e);
+#endif
 #ifdef PPM
     run_ppm_from_fft( fft_d, (unsigned long) fft_p->size, nr, MAX_COUNT_FOR_ZERO_PADDING );
-#endif    
+#endif
 
 #endif /* LIVE */
 
@@ -190,6 +219,11 @@ int fft_handler( int pipefd[2], void *shmem ) {
 #ifdef LIVE
     free(pids);
     } else {
+        printf("left while\n");
+    fftw_free(in);
+    destroy_fft( fft_p, fft_d );
+    free(fft_d);
+    free(fft_p);
      //   wait();
     }
 #endif /* LIVE */

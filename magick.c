@@ -14,7 +14,9 @@
 #include "codes.h"
 #include "type.h"
 #include "magick.h"
-
+#ifdef TIME
+#include <sys/time.h>
+#endif
 //extern int quarz_state;
 //extern int alsa_state;
 //extern int fft_master_state;
@@ -48,6 +50,15 @@ int find_min_max( double *data, long *max, long *min, unsigned long size ) {
 int run_ppm_from_fft( struct fft_data *fft_d, unsigned long size, int nr, int total_size ) {
     struct ppm_params *ppm;
     int lead_count, base_current, lead_loop;
+#ifdef TIME
+    clock_t time_start, time_end, time_used;
+    int time_in_sec, c;
+
+    //t_s = malloc(sizeof(struct tms));
+    //t_e = malloc(sizeof(struct tms));
+    //time_start = times( t_s );
+    time_start = clock();
+#endif
 
     ppm = malloc( sizeof(struct ppm_params) );
 
@@ -102,6 +113,16 @@ int run_ppm_from_fft( struct fft_data *fft_d, unsigned long size, int nr, int to
     }
 
     fclose(ppm->fd);
+#ifdef TIME
+    time_end = clock();
+    //time_end = times( t_e );
+    time_used = time_end - time_start;
+    c = getpid();
+    printf("%i (magick): time used %li to %li, total %li\n", c, time_start, time_end, time_used);
+    //printf("%i: user time %li, system time %li\n", c, (t_e->tms_utime - t_s->tms_utime), (t_e->tms_stime - t_s->tms_stime));
+    //free(t_s);
+    //free(t_e);
+#endif
 
     free(ppm);
     return OK;

@@ -216,7 +216,7 @@ int run_loop ( int loops, long *buffer, struct alsa_params *alsa ) {
             fprintf(stderr, "short read, read %d frames\n", rc);
         } else {
 #ifdef PRINT_DEBUG
-            printf("Frames read: %i\n", rc);
+            printf("(alsa): Frames read: %i\n", rc);
 #endif
         }
     }
@@ -313,8 +313,11 @@ int alsa_handler( int pipefd[2], void *shmem ) {
         printf("(alsa) %i: Send SIGCONT to (fft) %i\n", pids->pid_alsa, pids->pid_fft_master);
 #endif
         }
-        if( testcount == 1000 )
+        if( testcount == 1000 ){
             alsa_state += TERMINATE;
+            kill( pids->pid_fft_master, SIGUSR2 );
+            printf("textcount = %i\n", testcount);
+        }
         kill( pids->pid_fft_master, SIGCONT );
     }
 

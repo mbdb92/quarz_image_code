@@ -100,6 +100,14 @@ void fft_sig_handler( int signum ) {
 #endif
         }
     }
+    if( signum == SIGUSR2 ) {
+        if( ((fft_pipe_state & RUNTIME) >> SHIFT_R) ) {
+            fft_pipe_state -= RUNTIME;
+#ifdef PRINT_SIGNAL
+            printf("(fft) caught SIGUSR2, state = %i\n", fft_pipe_state);
+#endif
+        }
+    }
 }
 
 void suspend( int *state_variable, int state, int shift ) {

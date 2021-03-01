@@ -133,13 +133,8 @@ int main () {
          * Check it for references and additions
          * TODO Enhance this part to be more useful
          */
-            do {
-                waitpid( pids.pid_fft_master, &status, WUNTRACED
-            #ifdef WCONTINUED
-                        | WCONTINUED 
-            #endif
-                        );
-            } while( !WIFEXITED(status) );
+        int status;
+        waitpid( pids.pid_fft_master, &status, WUNTRACED);
 
         }
 #ifdef LIVE /* LIVE */
