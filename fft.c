@@ -199,8 +199,10 @@ int fft_handler( int pipefd[2], void *shmem ) {
     time_end = clock();
     //time_end = times( t_e );
     time_used = time_end - time_start;
+    double cpu_used = (double) time_used / CLOCKS_PER_SEC;
     c = getpid();
     printf("%i (fft): time used %li to %li, total %li\n", c, time_start, time_end, time_used);
+    printf("%lf in sec, with %i CLOCKS_PER_SEC\n", cpu_used, CLOCKS_PER_SEC);
     //printf("%i: user time %li, system time %li\n", c, (t_e->tms_utime - t_s->tms_utime), (t_e->tms_stime - t_s->tms_stime));
     //free(t_s);
     //free(t_e);

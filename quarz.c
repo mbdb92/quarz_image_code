@@ -22,6 +22,7 @@
 #endif /* LIVE */
 #include "fft.h"
 
+
 #ifdef LIVE /* LIVE */
 struct sigaction quarz_act;
 int quarz_state;
